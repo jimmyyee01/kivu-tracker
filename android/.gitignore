@@ -1,0 +1,9 @@
+/* build output — the published package is copied into ../public/download/ */
+.gradle/
+local.properties
+keystore.properties
+*.jks
+*.keystore
+build/
+app/build/
+.idea/

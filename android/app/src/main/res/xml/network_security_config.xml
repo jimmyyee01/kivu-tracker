@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Trackers are commonly served over plain http on a LAN / VPN (Wialon IPS has
+     no TLS either), so cleartext stays allowed. Tighten this if your server is
+     always on https: remove usesCleartextTraffic and this base-config. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

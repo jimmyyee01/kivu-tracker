@@ -1,0 +1,44 @@
+# =====================================================================
+#  KIVU Tracker — Apache routing (PHP + MySQL + IPS tracker)
+#  Point a VirtualHost / DocumentRoot at this folder, or serve it from
+#  XAMPP htdocs and open /kivu-tracker/.
+# =====================================================================
+RewriteEngine On
+
+# JSON API -> php/api.php?r=/path  (identical paths to the dev router)
+RewriteRule ^api/?$ php/api.php?r=/ [QSA,L]
+RewriteRule ^api/(.*)$ php/api.php?r=/$1 [QSA,L]
+
+# Pretty pages
+RewriteRule ^login/?$   public/login.html   [L]
+RewriteRule ^app/?$     public/app.html     [L]
+RewriteRule ^admin/?$   public/admin.html   [L]
+RewriteRule ^reports/?$ public/reports.html [L]
+RewriteRule ^super/?$   public/super.html   [L]
+RewriteRule ^track/([A-Za-z0-9_\-]{3,64})/?$ public/track.html [L]
+RewriteRule ^track/?$   public/track.html   [L]
+RewriteRule ^register/?$ public/register.html [L]
+RewriteRule ^signup/?$   public/register.html [L]
+RewriteRule ^billing/?$  public/billing.html  [L]
+RewriteRule ^reseller/?$ public/reseller.html [L]
+RewriteRule ^download/?$ public/download.html [L]
+RewriteRule ^download/(.+)$ public/download/$1 [L]
+RewriteRule ^pay/?$      public/pay.html      [L]
+RewriteRule ^pay/([A-Za-z0-9_\-]{3,64})/?$ public/pay.html [L]
+RewriteRule ^$          public/index.html   [L]
+
+# Static assets live in public/
+RewriteRule ^(css|js|img)/(.*)$ public/$1/$2 [L]
+
+# Optional pretty permanent links for public unit sharing
+RewriteRule ^api/track/([a-f0-9]{32})$ php/api.php?r=/track/$1 [QSA,L]
+
+# Keep PHP internals out of direct browser access (api.php + install.php only)
+<FilesMatch "^(config|engine|ingest|notify|trips|reports|ips|demo|routes_.*|tracker)\.php$">
+    Require all denied
+</FilesMatch>
+
+# Development helpers and runtime data are not part of the served site.
+# (php/ is already covered by the FilesMatch rule above, so api.php keeps working.)
+RewriteRule ^tools/ - [F,L]
+RewriteRule ^data/ - [F,L]

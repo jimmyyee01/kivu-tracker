@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Billing UI smoke test (development only)</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<!--
+  tools/ui-billing.html — development-only browser test for the billing screens.
+  It loads /register, /pay/<invoice> and /billing in iframes, drives them and
+  prints a report in #harness-out (see tools/ui-billing.js for the details).
+  Run it headlessly with --dump-dom, or open it in a browser to watch.
+-->
+<div style="max-width:1000px;margin:12px auto;padding:0 12px">
+  <h2 style="margin:0 0 4px">Billing UI smoke test</h2>
+  <p class="hint">Development aid — drives the real registration, gateway and billing pages.</p>
+  <div id="frames"></div>
+  <pre id="harness-out" style="padding:12px;background:#0b1017;color:#7fd4ff;border:1px solid #263149;border-radius:10px;white-space:pre-wrap"></pre>
+</div>
+<script src="/tools/ui-billing.js"></script>
+</body>
+</html>

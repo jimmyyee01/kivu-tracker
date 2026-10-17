@@ -1,0 +1,17 @@
+# runtime data (logs, drop-in files) — never commit
+data/*.log
+data/*.err
+data/*.json
+data/*.txt
+data/*.out
+
+# uploaded files (if you add uploads later)
+uploads/
+
+# editor / OS noise
+.DS_Store
+Thumbs.db
+*.swp
+*.bak
+.idea/
+.vscode/

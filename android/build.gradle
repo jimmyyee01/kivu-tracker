@@ -1,0 +1,5 @@
+/* Root build file — Android Gradle Plugin only, no other dependencies.
+   Build:  see android/README.md  (gradle assembleRelease, or build-apk.ps1) */
+plugins {
+    id 'com.android.application' version '8.5.2' apply false
+}

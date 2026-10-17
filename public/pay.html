@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulated gateway — KIVU Tracker</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="pay-wrap">
+  <div class="row" style="margin-bottom:12px">
+    <span class="logo"></span>
+    <b id="brand">KIVU Tracker</b>
+    <span class="spacer" style="flex:1"></span>
+    <span class="badge-sandbox">sandbox</span>
+  </div>
+
+  <div class="pay-card">
+    <h2 style="margin-top:0" id="gatewayTitle">Simulated payment gateway</h2>
+    <p class="muted small" id="gatewayNote">
+      This page stands in for a real gateway while the platform runs without API keys.
+      No money moves. Configure Stripe, Pesapal, M-Pesa, Flutterwave or PayPal in the
+      super-admin console to take real payments.
+    </p>
+
+    <div id="payBody">
+      <div class="row" style="justify-content:space-between;margin:14px 0">
+        <span class="muted small">Invoice</span><b class="mono" id="invoiceNo">—</b>
+      </div>
+      <div class="row" style="justify-content:space-between">
+        <span class="muted small">Plan</span><b id="planName">—</b>
+      </div>
+      <div class="row" style="justify-content:space-between;margin-top:6px">
+        <span class="muted small">Account</span><b id="accountName">—</b>
+      </div>
+      <div style="margin:16px 0 6px" class="muted small">Amount due</div>
+      <div class="pay-amount" id="amount">—</div>
+
+      <div class="row wrap" style="margin-top:18px">
+        <button class="btn primary" id="btnPay">Approve payment</button>
+        <button class="btn danger" id="btnFail">Simulate failure</button>
+        <button class="btn ghost" id="btnCancel">Cancel and go back</button>
+      </div>
+      <p class="hint" id="payNote" style="margin-top:12px"></p>
+    </div>
+
+    <div id="payDone" style="display:none">
+      <h3 id="doneTitle">Payment approved</h3>
+      <p class="muted" id="doneText"></p>
+      <div class="row wrap">
+        <a class="btn primary" href="/billing">Back to billing</a>
+        <a class="btn ghost" href="/app">Monitoring console</a>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="/js/common.js"></script>
+<script src="/js/pay.js"></script>
+</body>
+</html>

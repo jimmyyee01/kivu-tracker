@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">KIVU Tracker</string>
+    <string name="menu_reload">Reload console</string>
+    <string name="menu_settings">Server settings</string>
+    <string name="menu_tracker_start">Start tracker mode</string>
+    <string name="menu_tracker_stop">Stop tracker mode</string>
+    <string name="menu_about">About / install help</string>
+    <string name="settings_title">Connect to your server</string>
+    <string name="settings_server">Server address (e.g. http://192.168.1.10:8099)</string>
+    <string name="settings_unit">Unit unique ID (tracker mode)</string>
+    <string name="settings_password">Device password (tracker mode)</string>
+    <string name="settings_interval">Report every … seconds</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="tracker_notice">Tracker mode is on — this phone is reporting as a unit</string>
+    <string name="location_needed">Tracker mode needs the location permission</string>
+    <string name="bad_server">Enter a full address such as http://192.168.1.10:8099</string>
+</resources>

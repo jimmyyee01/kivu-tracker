@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Unit tracking — KIVU Tracker</title>
+<link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+</head>
+<body>
+<div id="topbar"></div>
+
+<div class="pad" style="max-width:1200px;margin:0 auto">
+  <div class="card pad" style="margin-bottom:12px">
+    <div class="row wrap">
+      <div class="field grow" style="margin:0">
+        <label>Unit</label>
+        <select id="unitSelect" style="max-width:420px"></select>
+      </div>
+      <div class="field" style="margin:0">
+        <label>Period</label>
+        <div class="btn-group" id="tkPresets"></div>
+      </div>
+      <button class="btn primary" id="btnLoad">Show track</button>
+      <button class="btn" id="btnLive">Live: on</button>
+    </div>
+  </div>
+
+  <div class="row wrap" id="summaryRow" style="margin-bottom:12px"></div>
+
+  <div class="grid2" style="grid-template-columns:1.5fr 1fr">
+    <div class="card" style="position:relative;overflow:hidden;min-height:480px">
+      <div id="map" style="position:absolute;inset:0"></div>
+      <div class="map-status" id="mapStatus">Loading…</div>
+    </div>
+    <div class="card">
+      <div class="tabs">
+        <div class="tab active" data-pane="tkTrips">Trips</div>
+        <div class="tab" data-pane="tkEvents">Events</div>
+        <div class="tab" data-pane="tkInfo">Info</div>
+      </div>
+      <div class="tabbody">
+        <div class="tabpane active" id="tkTrips"></div>
+        <div class="tabpane" id="tkEvents"></div>
+        <div class="tabpane" id="tkInfo"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/charts.js"></script>
+<script src="/js/mapcore.js"></script>
+<script src="/js/track.js"></script>
+</body>
+</html>

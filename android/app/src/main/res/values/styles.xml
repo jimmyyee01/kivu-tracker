@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark-ish shell so the console and the splash agree with the platform theme -->
+    <style name="AppTheme" parent="@android:style/Theme.Material.Light.DarkActionBar">
+        <item name="android:colorPrimary">#12253d</item>
+        <item name="android:colorPrimaryDark">#0b1017</item>
+        <item name="android:colorAccent">#2f9cf4</item>
+        <item name="android:windowBackground">#0f1420</item>
+    </style>
+</resources>

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monitoring — KIVU Tracker</title>
+<link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+</head>
+<body>
+<div id="topbar"></div>
+
+<div class="layout">
+  <!-- ------------------------------------------------------- unit tree -->
+  <aside class="side">
+    <div class="panel-head">
+      <span>Units</span>
+      <span class="right chip" id="unitCount">0</span>
+    </div>
+    <div class="pad" style="padding-bottom:6px">
+      <input type="search" id="unitSearch" placeholder="Search name, plate, IMEI, tag…">
+      <div class="row" style="margin-top:8px">
+        <select id="statusFilter">
+          <option value="">All statuses</option>
+          <option value="moving">Moving</option>
+          <option value="idle">Idle (engine on)</option>
+          <option value="parked">Parked</option>
+          <option value="offline">Offline</option>
+        </select>
+        <button class="btn sm" id="refreshBtn" title="Refresh now">⟳</button>
+      </div>
+    </div>
+    <div class="scroll" id="unitTree"></div>
+    <div class="panel-foot tiny" id="fleetStats"></div>
+  </aside>
+
+  <!-- ------------------------------------------------------------ map -->
+  <section class="center">
+    <div class="map-wrap">
+      <div id="map"></div>
+      <div class="map-toolbar no-print">
+        <button class="btn sm" id="btnFitAll">Fit all</button>
+        <button class="btn sm" id="btnFollow">Follow: on</button>
+        <button class="btn sm" id="btnTrack">Track</button>
+        <button class="btn sm active" id="btnFences">Geofences</button>
+        <button class="btn sm active" id="btnLive">Live 15s</button>
+        <span class="chip info" id="mapBackend">map</span>
+      </div>
+      <div class="map-status" id="mapStatus">Loading fleet…</div>
+    </div>
+    <div class="timeline hidden no-print" id="timeline">
+      <div class="bar">
+        <button class="btn sm" id="playBtn">▶</button>
+        <input type="range" id="timeSlider" min="0" max="0" value="0" style="flex:1">
+        <span class="mono small nowrap" id="timeLabel">—</span>
+        <select id="playSpeed" style="width:auto">
+          <option value="1">1×</option>
+          <option value="2" selected>2×</option>
+          <option value="5">5×</option>
+          <option value="10">10×</option>
+        </select>
+        <button class="btn sm ghost" id="hideTimeline">Hide</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------ inspector -->
+  <aside class="inspector">
+    <div class="panel-head">
+      <span id="inspectorTitle">Unit</span>
+      <span class="right chip" id="inspectorStatus">—</span>
+    </div>
+    <div class="tabs" id="inspTabs">
+      <div class="tab active" data-pane="paneInfo">Info</div>
+      <div class="tab" data-pane="paneTrack">Track</div>
+      <div class="tab" data-pane="paneTrips">Trips</div>
+      <div class="tab" data-pane="paneEvents">Events</div>
+      <div class="tab" data-pane="paneMessages">Messages</div>
+      <div class="tab" data-pane="paneCommands">Commands</div>
+    </div>
+    <div class="scroll tabbody">
+      <div class="tabpane active" id="paneInfo"></div>
+      <div class="tabpane" id="paneTrack"></div>
+      <div class="tabpane" id="paneTrips"></div>
+      <div class="tabpane" id="paneEvents"></div>
+      <div class="tabpane" id="paneMessages"></div>
+      <div class="tabpane" id="paneCommands"></div>
+    </div>
+  </aside>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/charts.js"></script>
+<script src="/js/mapcore.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

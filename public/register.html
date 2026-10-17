@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Start your free trial — KIVU Tracker</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="billing-wrap" style="max-width:1000px">
+  <div class="row wrap" style="margin:6px 0 14px">
+    <span class="logo"></span>
+    <h1 id="brand" style="margin:0">KIVU Tracker</h1>
+    <span class="spacer" style="flex:1"></span>
+    <a class="btn ghost sm" href="/login">I already have an account</a>
+    <a class="btn ghost sm" href="/">Home</a>
+  </div>
+
+  <div class="card pad" style="margin-bottom:14px">
+    <h2 style="margin-top:0">Start tracking in minutes — <span id="trialBadge">5-day</span> free trial</h2>
+    <p class="muted small" id="intro">Create your fleet account, connect your trackers and evaluate every feature.
+      No card needed to start; add a plan whenever you are ready and your trial converts into a paid subscription.</p>
+    <div class="banner info" id="signupClosed" style="display:none">
+      Self-service registration is currently disabled — ask the platform administrator for an account.
+    </div>
+  </div>
+
+  <h3>1. Choose a plan</h3>
+  <div class="plan-grid" id="planGrid"></div>
+
+  <h3 style="margin-top:18px">2. Your details</h3>
+  <form class="card pad" id="signupForm" autocomplete="on" style="max-width:760px">
+    <div class="row wrap" style="align-items:flex-start">
+      <div class="field" style="flex:1;min-width:240px">
+        <label for="company">Company / fleet name *</label>
+        <input type="text" id="company" name="company" required>
+      </div>
+      <div class="field" style="flex:1;min-width:240px">
+        <label for="full_name">Your name</label>
+        <input type="text" id="full_name" name="full_name" autocomplete="name">
+      </div>
+    </div>
+    <div class="row wrap" style="align-items:flex-start">
+      <div class="field" style="flex:1;min-width:240px">
+        <label for="email">Work e-mail *</label>
+        <input type="email" id="email" name="email" autocomplete="email" required>
+      </div>
+      <div class="field" style="flex:1;min-width:240px">
+        <label for="phone">Phone (for M-Pesa payments)</label>
+        <input type="tel" id="phone" name="phone" placeholder="254712345678">
+      </div>
+    </div>
+    <div class="row wrap" style="align-items:flex-start">
+      <div class="field" style="flex:1;min-width:240px">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" placeholder="defaults to your e-mail name">
+      </div>
+      <div class="field" style="flex:1;min-width:240px">
+        <label for="password">Password (6+ characters) *</label>
+        <input type="password" id="password" name="password" autocomplete="new-password" required>
+      </div>
+    </div>
+    <div class="row wrap" style="align-items:flex-start">
+      <div class="field" style="flex:1;min-width:240px">
+        <label for="asset_type">What do you track? (asset type)</label>
+        <select id="asset_type" name="asset_type"></select>
+        <span class="hint">The icon used on the map and in the unit list — new units inherit it.</span>
+      </div>
+      <div class="field" style="flex:1;min-width:240px">
+        <label for="currency">Currency</label>
+        <select id="currency" name="currency">
+          <option value="USD">USD — US dollar</option>
+          <option value="KES">KES — Kenyan shilling</option>
+          <option value="UGX">UGX — Ugandan shilling</option>
+          <option value="TZS">TZS — Tanzanian shilling</option>
+        </select>
+      </div>
+      <div class="field" style="flex:1;min-width:240px">
+        <label for="timezone">Timezone</label>
+        <select id="timezone" name="timezone">
+          <option value="Africa/Nairobi">Africa/Nairobi</option>
+          <option value="Africa/Kampala">Africa/Kampala</option>
+          <option value="Africa/Dar_es_Salaam">Africa/Dar es Salaam</option>
+          <option value="Africa/Lagos">Africa/Lagos</option>
+          <option value="Africa/Johannesburg">Africa/Johannesburg</option>
+          <option value="UTC">UTC</option>
+        </select>
+      </div>
+    </div>
+    <p class="hint">By creating an account you agree to be invoiced for the selected plan after the free trial.
+      You can cancel auto-renewal at any time from the billing page.</p>
+    <div class="row wrap">
+      <button class="btn primary" id="submitBtn" type="submit">Create my account &amp; start the trial</button>
+      <span class="hint" id="formNote"></span>
+    </div>
+  </form>
+
+  <div class="card pad" id="doneCard" style="display:none;margin-top:14px">
+    <h2 id="doneTitle" style="margin-top:0">Your trial has started</h2>
+    <p class="muted" id="doneText"></p>
+    <div class="row wrap">
+      <a class="btn primary" id="btnBilling" href="/billing#details">Add billing details</a>
+      <a class="btn" id="btnConsole" href="/app">Open the monitoring console</a>
+    </div>
+    <p class="hint" id="doneHint" style="margin-top:10px"></p>
+  </div>
+</div>
+<script src="/js/common.js"></script>
+<script src="/js/register.js"></script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Super console billing switch test (development only)</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<!--
+  =====================================================================
+  tools/ui-super-billing.html — development-only browser test.
+
+  It loads the real /super page markup and scripts, opens the
+  "Plans & billing" tab, toggles a payment integration off with the
+  per-gateway switch, saves, verifies it through the API, switches it
+  back on and reports everything in #harness-out.
+
+  Run it headlessly (no clicks needed):
+
+    chrome --headless=new --disable-gpu --virtual-time-budget=40000 ^
+      --dump-dom "http://127.0.0.1:8099/tools/ui-super-billing.html?token=<superadmin token>"
+
+  The token comes from the URL (?token=), which common.js adopts and
+  strips. Serve through the bundled router (php -S … tools/php-router.php)
+  or behind Apache with tools/ blocked from HTTP (see .htaccess).
+  =====================================================================
+-->
+<div id="harness-mount"></div>
+<pre id="harness-out" style="max-width:1000px;margin:12px auto;padding:12px;background:#0b1017;color:#7fd4ff;border:1px solid #263149;border-radius:10px;white-space:pre-wrap"></pre>
+<script>
+  /* pull in the real super console markup so every id the scripts expect exists */
+  (function () {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/super', false);
+    xhr.send();
+    var html = xhr.responseText || '';
+    var m = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+    var body = m ? m[1] : html;
+    body = body.replace(/<script[\s\S]*?<\/script>/gi, '');   // the harness loads these itself
+    document.getElementById('harness-mount').innerHTML = body;
+  })();
+</script>
+<script src="/js/common.js"></script>
+<script src="/js/super.js"></script>
+<script src="/tools/ui-super-billing.js"></script>
+</body>
+</html>

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Download the app — KIVU Tracker</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="auth-body">
+<div id="topbar"></div>
+
+<div class="landing">
+  <div class="row wrap" style="align-items:center;gap:10px">
+    <h1 style="margin:0" id="appTitle">KIVU Tracker for Android</h1>
+    <span class="chip info" id="appVersionChip">—</span>
+    <span class="chip" id="appAvailability">checking…</span>
+    <span class="spacer" style="flex:1"></span>
+    <a class="btn ghost" href="/login">Sign in</a>
+  </div>
+  <p class="muted" id="appLead" style="max-width:760px">
+    The phone app for this platform: the whole console (live map, units, trips, reports,
+    geofences) in a native shell — and, if you want it, the phone itself becomes a tracker
+    that reports its position to this server.
+  </p>
+
+  <div class="stats" id="appStats" style="margin-top:14px"></div>
+  <p class="hint" id="appHash" style="margin-top:8px"></p>
+
+  <div class="card pad" style="margin-top:16px">
+    <div class="row wrap">
+      <button class="btn primary" id="btnDownload">Download the APK</button>
+      <button class="btn" id="btnCopyLink">Copy the download link</button>
+      <a class="btn ghost" id="btnSendMail" href="#">E-mail the link to a phone</a>
+      <span class="spacer" style="flex:1"></span>
+      <span class="hint" id="downloadNote"></span>
+    </div>
+    <p class="hint" id="appWhatsNew" style="margin-top:10px"></p>
+  </div>
+
+  <div class="grid cols-2" style="margin-top:16px">
+    <div class="card pad">
+      <h3>Install it on the phone</h3>
+      <ol id="installSteps" class="hint" style="padding-left:20px"></ol>
+    </div>
+    <div class="card pad">
+      <h3>What the app is allowed to do</h3>
+      <ul id="appPermissions" class="hint" style="padding-left:20px"></ul>
+      <h3 style="margin-top:12px">Tracker mode in one line</h3>
+      <p class="hint" id="trackerLine"></p>
+    </div>
+  </div>
+
+  <div class="card pad" style="margin-top:16px">
+    <h3>Features</h3>
+    <ul id="appFeatures" class="hint" style="padding-left:20px"></ul>
+    <p class="hint" style="margin-top:10px">
+      Building this app yourself (it is plain Android source, no third-party libraries) is
+      documented in <span class="mono">android/README.md</span>; the one-line build is
+      <span class="mono">android\build-apk.ps1</span> (or <span class="mono">android/build-apk.sh</span>),
+      which publishes the APK into <span class="mono">public/download/</span>.
+    </p>
+  </div>
+</div>
+
+<script src="/js/common.js"></script>
+<script src="/js/download.js"></script>
+</body>
+</html>

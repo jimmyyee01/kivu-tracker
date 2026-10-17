@@ -1,0 +1,11 @@
+/* KIVU Tracker — Android client (see README.md in this folder).
+   Two modules: only :app — a WebView shell for the console plus an optional
+   tracker service that reports the phone's own GPS as a unit. */
+pluginManagement {
+    repositories { google(); mavenCentral(); gradlePluginPortal() }
+}
+dependencyResolutionManagement {
+    repositories { google(); mavenCentral() }
+}
+rootProject.name = 'kivu-tracker'
+include ':app'

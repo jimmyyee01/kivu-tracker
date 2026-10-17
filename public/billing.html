@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Billing &amp; plans — KIVU Tracker</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div id="topbar"></div>
+
+<div class="billing-wrap">
+  <div id="returnNote"></div>
+  <div id="detailsBanner"></div>
+
+  <div class="card pad" id="statusCard" style="margin-bottom:14px">
+    <div class="row wrap">
+      <h2 id="planTitle" style="margin:0">Loading…</h2>
+      <span class="chip info" id="statusChip">—</span>
+      <span class="chip" id="usageChip">—</span>
+      <span class="spacer" style="flex:1"></span>
+      <button class="btn sm" id="btnCancel">Cancel auto-renewal</button>
+      <button class="btn sm ghost" id="btnReload">Refresh</button>
+    </div>
+    <p class="muted small" id="statusNote" style="margin:10px 0 0"></p>
+    <div class="stats" id="billingStats" style="margin-top:12px"></div>
+    <p class="hint" id="overageNote" style="margin-top:6px"></p>
+    <p class="hint" id="remindersNote" style="margin-top:8px"></p>
+  </div>
+
+  <h3>Plans</h3>
+  <p class="hint" id="gatewayNote"></p>
+  <div class="plan-grid" id="planGrid"></div>
+
+  <div class="card pad" style="margin-top:16px;max-width:760px" id="details">
+    <h3 style="margin-top:0">Billing details</h3>
+    <p class="muted small">Used on invoices and receipts; the phone number is pre-filled for M-Pesa payments.
+      These details are required before the first payment and for the renewal reminders.</p>
+    <div id="detailsForm"></div>
+    <button class="btn primary" id="btnSaveDetails">Save billing details</button>
+    <h3 style="margin-top:18px">Automatic billing</h3>
+    <label class="row" style="gap:8px;align-items:center;cursor:pointer">
+      <input type="checkbox" id="autoRenewBox">
+      <span>Charge my saved payment method when the trial / paid period ends (no interruption).</span>
+    </label>
+    <div id="methodBox" style="margin-top:10px"></div>
+  </div>
+
+  <h3 style="margin-top:18px">Invoices &amp; payments</h3>
+  <div id="invoiceTable"></div>
+</div>
+
+<script src="/js/common.js"></script>
+<script src="/js/billing.js"></script>
+</body>
+</html>

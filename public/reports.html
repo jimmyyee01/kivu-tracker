@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reports — KIVU Tracker</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div id="topbar"></div>
+
+<div class="layout" style="height:calc(100vh - 50px)">
+  <!-- ------------------------------------------------------- report menu -->
+  <aside class="side" style="width:280px">
+    <div class="panel-head">Report type</div>
+    <div class="scroll" id="reportMenu"></div>
+    <div class="panel-foot">
+      <div class="panel-head" style="border:0;background:transparent;padding:0 0 6px">Saved templates</div>
+      <div id="templateList" class="col"></div>
+      <button class="btn sm" id="btnSaveTemplate" style="margin-top:8px;width:100%;justify-content:center">
+        Save current settings as template
+      </button>
+    </div>
+  </aside>
+
+  <section class="center" style="overflow:auto">
+    <div class="pad">
+      <div class="card pad" style="margin-bottom:14px">
+        <div class="grid3">
+          <div class="field">
+            <label>From</label>
+            <input type="datetime-local" id="repFrom">
+          </div>
+          <div class="field">
+            <label>To</label>
+            <input type="datetime-local" id="repTo">
+          </div>
+          <div class="field">
+            <label>Preset</label>
+            <div class="btn-group" id="repPresets"></div>
+          </div>
+        </div>
+        <div class="grid3">
+          <div class="field">
+            <label>Units (none = all)</label>
+            <select id="repUnits" multiple size="5"></select>
+          </div>
+          <div class="field">
+            <label>Group activity by</label>
+            <select id="repGroup">
+              <option value="day">Day</option>
+              <option value="hour">Hour</option>
+            </select>
+            <label style="margin-top:10px">Speed limit override (km/h)</label>
+            <input type="number" id="repSpeedLimit" placeholder="use unit limit">
+          </div>
+          <div class="field">
+            <label>Fuel threshold (litres)</label>
+            <input type="number" id="repFuel" value="10">
+            <label style="margin-top:10px">Event type filter</label>
+            <select id="repEventType">
+              <option value="">All events</option>
+            </select>
+          </div>
+        </div>
+        <div class="row wrap">
+          <button class="btn primary" id="btnRun">Run report</button>
+          <button class="btn" id="btnCsv">Download CSV</button>
+          <button class="btn" id="btnPrint">Print / PDF</button>
+          <span class="chip info right" id="reportStatus">Select a report type</span>
+        </div>
+      </div>
+
+      <div class="report" id="reportOut">
+        <p class="muted">Pick a report type on the left, choose a period and press <b>Run report</b>.</p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="/js/common.js"></script>
+<script src="/js/charts.js"></script>
+<script src="/js/reports.js"></script>
+</body>
+</html>

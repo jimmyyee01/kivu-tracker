@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Accounts & settings — KIVU Tracker</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div id="topbar"></div>
+
+<div style="max-width:1300px;margin:0 auto;padding:14px">
+  <div class="tabs" id="superTabs">
+    <div class="tab active" data-pane="paneAccounts">Accounts</div>
+    <div class="tab" data-pane="paneBilling">Plans &amp; billing</div>
+    <div class="tab" data-pane="paneReports">Financial reports</div>
+    <div class="tab" data-pane="paneSettings">Platform settings</div>
+    <div class="tab" data-pane="paneSystem">System &amp; devices</div>
+  </div>
+
+  <div class="tabbody">
+    <div class="tabpane active" id="paneAccounts">
+      <div class="row wrap" style="margin-bottom:10px">
+        <button class="btn primary sm" id="btnNewAccount">+ New account</button>
+        <span class="chip info right" id="accountChip">—</span>
+      </div>
+      <div id="accountsTable"></div>
+      <div id="accountDetail" style="margin-top:16px"></div>
+    </div>
+
+    <div class="tabpane" id="paneBilling">
+      <div class="card pad" style="margin-bottom:14px">
+        <div class="row wrap">
+          <h2 style="margin:0">Subscriptions &amp; revenue</h2>
+          <span class="spacer" style="flex:1"></span>
+          <button class="btn sm" id="btnReloadBilling">Refresh</button>
+        </div>
+        <div class="stats" id="billingTotals" style="margin-top:12px"></div>
+        <p class="hint" id="billingHint" style="margin-top:8px"></p>
+      </div>
+
+      <h3>Client accounts (trial &amp; subscription state)</h3>
+      <div id="subsTable"></div>
+
+      <h3 style="margin-top:16px">Plans</h3>
+      <div class="row wrap" style="margin-bottom:8px">
+        <button class="btn primary sm" id="btnNewPlan">+ New plan</button>
+        <span class="hint">Plans drive the register page, the billing page and the per-account unit limit.</span>
+      </div>
+      <div id="plansTable"></div>
+
+      <h3 style="margin-top:16px">Invoices &amp; payments</h3>
+      <div id="paymentsTable"></div>
+
+      <h3 style="margin-top:16px">Payment reminders (e-mail)</h3>
+      <p class="hint" id="remindersHint"></p>
+      <div id="remindersTable"></div>
+
+      <h3 style="margin-top:16px">Reseller portals (full-year licence)</h3>
+      <p class="hint" id="portalsHint"></p>
+      <div class="row wrap" style="margin-bottom:8px">
+        <button class="btn primary sm" id="btnNewPortal">+ New reseller portal</button>
+      </div>
+      <div id="portalsTable"></div>
+
+      <h3 style="margin-top:16px">Gateway credentials</h3>
+      <p class="hint" id="gatewayHint"></p>
+      <div id="gatewayForm"></div>
+      <div class="row wrap" style="margin-top:10px">
+        <button class="btn primary" id="btnSaveGateways">Save gateway &amp; trial settings</button>
+        <span class="hint" id="webhookHint"></span>
+      </div>
+    </div>
+
+    <div class="tabpane" id="paneReports">
+      <div class="card pad" style="margin-bottom:14px">
+        <div class="row wrap">
+          <h2 style="margin:0">Financial, invoicing &amp; performance reports</h2>
+          <span class="spacer" style="flex:1"></span>
+          <label class="tiny dim">From</label>
+          <input type="date" id="finFrom" style="width:auto">
+          <label class="tiny dim">To</label>
+          <input type="date" id="finTo" style="width:auto">
+          <button class="btn sm primary" id="btnRunFinance">Run</button>
+          <button class="btn sm" id="btnFinanceAlerts">Refresh alerts</button>
+        </div>
+        <p class="hint" id="finHint" style="margin-top:8px"></p>
+        <div class="stats" id="finTotals" style="margin-top:10px"></div>
+      </div>
+
+      <h3>Invoicing alerts</h3>
+      <div id="finAlerts"></div>
+
+      <h3 style="margin-top:16px">Revenue by currency &amp; gateway</h3>
+      <div class="row wrap" style="margin-bottom:6px">
+        <button class="btn xs" id="csvFinancial" data-csv="/api/finance/financial">Financial CSV</button>
+        <button class="btn xs" id="csvInvoicing" data-csv="/api/finance/invoicing">Invoices CSV</button>
+        <button class="btn xs" id="csvAlerts" data-csv="/api/finance/alerts">Alerts CSV</button>
+        <button class="btn xs" id="csvPerformance" data-csv="/api/finance/performance">Performance CSV</button>
+      </div>
+      <div id="finFinancial"></div>
+
+      <h3 style="margin-top:16px">Invoice ledger &amp; ageing</h3>
+      <div id="finInvoicing"></div>
+
+      <h3 style="margin-top:16px">Account performance (operations + revenue)</h3>
+      <div id="finPerformance"></div>
+    </div>
+
+    <div class="tabpane" id="paneSettings">
+      <div class="card pad" style="max-width:820px;margin-bottom:14px">
+        <h2>Platform logo</h2>
+        <p class="muted small">Shown in the top bar of every console, on the sign-in, landing, sign-up and
+          payment pages, in the browser tab (favicon) and at the top of the payment-reminder e-mails.
+          PNG, JPG, WebP, GIF or SVG, up to 512&nbsp;KB — a transparent or white background works best.</p>
+        <div class="logo-card">
+          <div class="logo-preview" id="logoPreview"></div>
+          <div style="flex:1;min-width:280px">
+            <div class="row wrap">
+              <input type="file" id="logoFile"
+                accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" style="max-width:260px">
+              <button class="btn primary sm" id="btnLogoUpload">Upload logo</button>
+              <button class="btn sm danger" id="btnLogoRemove">Remove logo</button>
+            </div>
+            <p class="hint" id="logoHint" style="margin-top:8px"></p>
+            <div id="logoLog"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card pad" style="max-width:760px">
+        <h2>Platform settings</h2>
+        <p class="muted small">These values drive the map, the offline geocoder tolerance, retention and the
+          IPS server port. Only a super administrator can change them.</p>
+        <div id="settingsForm"></div>
+        <button class="btn primary" id="btnSaveSettings">Save settings</button>
+      </div>
+    </div>
+
+    <div class="tabpane" id="paneSystem">
+      <div class="card pad" style="margin-bottom:14px">
+        <h2>Service health</h2>
+        <div id="healthBox"></div>
+        <div class="row wrap" style="margin-top:10px">
+          <button class="btn sm" id="btnRunJobs">Run scheduled jobs now</button>
+          <button class="btn sm" id="btnReloadHealth">Refresh</button>
+        </div>
+      </div>
+      <h2>Device connections (all accounts)</h2>
+      <div id="deviceLog"></div>
+      <h2 style="margin-top:16px">Supported devices &amp; protocols</h2>
+      <p class="hint" id="deviceCatalogueHint"></p>
+      <div id="deviceCatalogue"></div>
+      <h2 style="margin-top:16px">Audit trail</h2>
+      <div id="auditLog"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/common.js"></script>
+<script src="/js/super.js"></script>
+</body>
+</html>

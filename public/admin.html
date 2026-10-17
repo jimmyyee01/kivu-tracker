@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Administration — KIVU Tracker</title>
+<link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+</head>
+<body>
+<div id="topbar"></div>
+
+<div style="max-width:1500px;margin:0 auto;padding:14px">
+  <div class="tabs" id="adminTabs">
+    <div class="tab active" data-pane="paneUnits">Units</div>
+    <div class="tab" data-pane="paneGeofences">Geofences</div>
+    <div class="tab" data-pane="paneNotifications">Notifications</div>
+    <div class="tab" data-pane="paneDrivers">Drivers</div>
+    <div class="tab" data-pane="paneMaintenance">Service</div>
+    <div class="tab" data-pane="paneGroups">Groups</div>
+    <div class="tab" data-pane="paneUsers">Users</div>
+    <div class="tab" data-pane="paneDevices">Device log</div>
+    <div class="tab" data-pane="paneAudit">Audit</div>
+  </div>
+
+  <div class="tabbody">
+    <div class="tabpane active" id="paneUnits">
+      <div class="row wrap" style="margin-bottom:10px">
+        <button class="btn primary sm" id="btnNewUnit">+ New unit</button>
+        <input type="search" id="unitFilter" placeholder="Filter units…" style="max-width:260px">
+        <span class="chip info right" id="unitCountChip">—</span>
+      </div>
+      <div id="unitsTable"></div>
+    </div>
+
+    <div class="tabpane" id="paneGeofences">
+      <div class="row wrap" style="margin-bottom:10px">
+        <button class="btn primary sm" id="btnNewGeofence">+ New geofence</button>
+        <button class="btn sm" id="btnDrawCircle">Draw circle</button>
+        <button class="btn sm" id="btnDrawPolygon">Draw polygon</button>
+        <button class="btn sm" id="btnDrawPolyline">Draw route</button>
+        <button class="btn sm danger" id="btnCancelDraw">Cancel drawing</button>
+        <span class="chip info right" id="drawHint">Pick a tool, then click the map.</span>
+      </div>
+      <div class="grid3">
+        <div style="grid-column:span 1" id="geofencesTable"></div>
+        <div class="card" style="grid-column:span 2;position:relative;overflow:hidden;min-height:460px">
+          <div id="fenceMap" style="position:absolute;inset:0"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tabpane" id="paneNotifications">
+      <div class="row wrap" style="margin-bottom:10px">
+        <button class="btn primary sm" id="btnNewNotification">+ New notification</button>
+        <span class="chip info right" id="notificationCountChip">—</span>
+      </div>
+      <div id="notificationsTable"></div>
+    </div>
+
+    <div class="tabpane" id="paneDrivers">
+      <div class="row wrap" style="margin-bottom:10px">
+        <button class="btn primary sm" id="btnNewDriver">+ New driver</button>
+      </div>
+      <div id="driversTable"></div>
+    </div>
+
+    <div class="tabpane" id="paneMaintenance">
+      <div class="row wrap" style="margin-bottom:10px">
+        <button class="btn primary sm" id="btnNewMaintenance">+ New service interval</button>
+      </div>
+      <div id="maintenanceTable"></div>
+    </div>
+
+    <div class="tabpane" id="paneGroups">
+      <div class="row wrap" style="margin-bottom:10px">
+        <button class="btn primary sm" id="btnNewGroup">+ New group</button>
+      </div>
+      <div id="groupsTable"></div>
+    </div>
+
+    <div class="tabpane" id="paneUsers">
+      <div class="row wrap" style="margin-bottom:10px">
+        <button class="btn primary sm" id="btnNewUser">+ New user</button>
+        <span class="chip info right" id="userCountChip">—</span>
+      </div>
+      <div id="usersTable"></div>
+    </div>
+
+    <div class="tabpane" id="paneDevices">
+      <div id="devicesTable"></div>
+    </div>
+
+    <div class="tabpane" id="paneAudit">
+      <div id="auditTable"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/mapcore.js"></script>
+<script src="/js/admin.js"></script>
+</body>
+</html>

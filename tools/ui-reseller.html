@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reseller portal console test (development only)</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<!--
+  =====================================================================
+  tools/ui-reseller.html — development-only browser test.
+
+  It loads the real /reseller markup and scripts with a reseller session
+  (token in the URL), waits for the portal card, the colour-coded KPI
+  tiles and the client-account table, then reports everything in
+  #harness-out (see tools/ui-reseller.js).
+
+  Run it headlessly (no clicks needed):
+
+    chrome --headless=new --disable-gpu --virtual-time-budget=40000 ^
+      --dump-dom "http://127.0.0.1:8099/tools/ui-reseller.html?token=<reseller token>"
+
+  Create the session first (super admin):
+    POST /api/portals {name, contact_email, owner_username, owner_password,
+                       gateway:"sandbox"} → then pay the returned invoice with
+    POST /api/pay/<id>/complete {"outcome":"paid"} and sign in as the owner.
+
+  Serve through the bundled router (php -S … tools/php-router.php) or behind
+  Apache with tools/ blocked from HTTP (see .htaccess).
+  =====================================================================
+-->
+<div id="harness-mount"></div>
+<pre id="harness-out" style="max-width:1000px;margin:12px auto;padding:12px;background:#0b1017;color:#7fd4ff;border:1px solid #263149;border-radius:10px;white-space:pre-wrap"></pre>
+<script>
+  /* pull in the real reseller console markup so every id the scripts expect exists */
+  (function () {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/reseller', false);
+    xhr.send();
+    var html = xhr.responseText || '';
+    var m = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+    var body = m ? m[1] : html;
+    body = body.replace(/<script[\s\S]*?<\/script>/gi, '');   // the harness loads these itself
+    document.getElementById('harness-mount').innerHTML = body;
+  })();
+</script>
+<script src="/js/common.js"></script>
+<script src="/js/reseller.js"></script>
+<script src="/tools/ui-reseller.js"></script>
+</body>
+</html>

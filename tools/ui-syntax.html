@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>syntax probe</title></head>
+<body>
+<pre id="out"></pre>
+<script>
+  const files = ['/js/common.js', '/js/reseller.js', '/js/super.js', '/js/app.js', '/js/admin.js',
+    '/js/billing.js', '/js/reports.js', '/js/track.js', '/js/register.js', '/js/login.js',
+    '/js/mapcore.js', '/js/charts.js'];
+  (async function () {
+    const out = document.getElementById('out');
+    for (const f of files) {
+      try {
+        const t = await (await fetch(f)).text();
+        try { new Function(t); out.textContent += 'OK    ' + f + '\n'; }
+        catch (e) { out.textContent += 'FAIL  ' + f + ' :: ' + e.message + '\n'; }
+      } catch (e) { out.textContent += 'FETCH ' + f + ' :: ' + e.message + '\n'; }
+    }
+    out.textContent += 'DONE\n';
+  })();
+</script>
+</body>
+</html>

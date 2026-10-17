@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KIVU Tracker — GPS tracking &amp; fleet management</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="landing">
+  <div class="hero">
+    <div>
+      <div class="brand row" style="margin-bottom:10px">
+        <span class="logo"></span>
+        <h1 style="margin:0">KIVU Tracker</h1>
+      </div>
+      <h1>GPS tracking and fleet management, running on your own server.</h1>
+      <p>A complete, self-hosted fleet platform: a real <b>Wialon IPS 1.1 TCP server</b> for trackers,
+        live monitoring, trip &amp; parking detection, geofences, notification rules, fuel analysis
+        and twelve report types with CSV export and printing.</p>
+      <div class="row wrap" style="margin-top:18px">
+        <a class="btn primary" href="/register">Start a 5-day free trial</a>
+        <a class="btn" href="/app">Open the monitoring console</a>
+        <a class="btn" href="/reports">Reports</a>
+        <a class="btn ghost" href="/login">Sign in</a>
+        <a class="btn ghost" href="/download">Get the Android app</a>
+      </div>
+      <p class="hint" style="margin-top:12px">
+        Self-service signup creates your own account, connects your trackers to the built-in IPS server and
+        starts a free trial — pay later by card (Visa/Mastercard), mobile money (M-Pesa, Pesapal, Flutterwave),
+        PayPal or bank transfer.
+      </p>
+      <p class="hint" style="margin-top:12px">
+        Demo logins (created by <span class="mono">install.php</span>):
+        <span class="mono">admin / Admin@123</span> ·
+        <span class="mono">superadmin / SuperAdmin@123</span> ·
+        <span class="mono">viewer / Viewer@123</span>
+      </p>
+    </div>
+    <div class="card pad">
+      <h3>Platform status</h3>
+      <div class="stats" id="stats">
+        <div class="stat"><div class="v">—</div><div class="l">loading</div></div>
+      </div>
+      <p class="hint" id="statusNote" style="margin-top:10px">Checking the service…</p>
+    </div>
+  </div>
+
+  <div class="features">
+    <div class="feature">
+      <h3>Real device protocol</h3>
+      <p class="small">Trackers connect to the built-in IPS server on TCP port 20332
+        (<span class="mono">#L#</span> login, <span class="mono">#D#</span> data,
+        <span class="mono">#SD#</span> messages, <span class="mono">#P#</span> keep-alive) and receive
+        commands back over the same link. An HTTP ingest endpoint is available for gateways.</p>
+    </div>
+    <div class="feature">
+      <h3>Monitoring built for real fleets</h3>
+      <p class="small">Unit tree with status colours, live map, track playback with a timeline,
+        trips / parkings / idle blocks, geofence enter-exit events, notification rules
+        (speed, ignition, SOS, fuel theft, idling, power cut, offline, service due).</p>
+    </div>
+    <div class="feature">
+      <h3>Reports you can hand to a client</h3>
+      <p class="small">Unit summary, trips, parkings, activity, geofence visits, events,
+        speed violations, fuel fillings &amp; drainings, engine hours, mileage, drivers and
+        maintenance — with charts, totals, CSV export and a printable layout.</p>
+    </div>
+    <div class="feature">
+      <h3>Multi-account and roles</h3>
+      <p class="small">Accounts (resources) with their own units, users, geofences and rules.
+        Roles: super admin, account admin, operator and viewer — the viewer can be limited to
+        specific units, which is how you give a client read-only access.</p>
+    </div>
+    <div class="feature">
+      <h3>No dependencies, no build step</h3>
+      <p class="small">PHP 8 + MySQL/MariaDB + vanilla JavaScript. The map uses Leaflet when it
+        can be downloaded and falls back to a built-in canvas map so the console still works
+        fully offline.</p>
+    </div>
+    <div class="feature">
+      <h3>Tools included</h3>
+      <p class="small"><span class="mono">tools/simulator.php</span> emulates a device and streams
+        live positions, <span class="mono">tools/gen_history.php</span> creates demo history and
+        <span class="mono">tools/api-test.php</span> runs an end-to-end API test suite.</p>
+    </div>
+  </div>
+
+  <h2 style="margin-top:34px">Quick start</h2>
+  <div class="card pad">
+    <pre class="mono small" style="overflow:auto;margin:0">
+# 1. serve the console (Apache/XAMPP also works — .htaccess is included)
+php -S 127.0.0.1:8099 -t "C:\path\to\kivu-tracker" "C:\path\to\kivu-tracker\tools\php-router.php"
+
+# 2. create the database + demo fleet (once)
+php install.php --fresh
+
+# 3. start the Wialon IPS device server
+php php/tracker.php --verbose
+
+# 4. stream a live track from the bundled device simulator
+php tools/simulator.php 356938035643811 --minutes=5 --interval=5
+
+# 5. verify everything end to end
+php tools/api-test.php http://127.0.0.1:8099</pre>
+  </div>
+
+  <p class="hint" style="margin-top:24px">KIVU Tracker · independent implementation,
+    no affiliation with Gurtam. Built for XAMPP-style PHP 8 + MySQL hosting.</p>
+</div>
+
+<script src="/js/common.js"></script>
+<script>
+  API.get('/api/health', { silent: true }).then(function (health) {
+    brandingRemember(health.logo || '');
+    applyBranding();
+    const box = document.getElementById('stats');
+    box.innerHTML = '';
+    const rows = [
+      ['Units', health.counters.units],
+      ['Messages stored', fmt.num(health.counters.messages, 0)],
+      ['IPS port', health.ips_port],
+      ['PHP', health.php],
+      ['Database', health.database]
+    ];
+    const colors = ['blue', 'violet', 'orange', 'teal',
+      health.database === 'ok' ? 'green' : 'red'];
+    rows.forEach((r, i) => box.appendChild(el('div', { class: 'stat k-' + colors[i] },
+      '<div class="v">' + h(r[1]) + '</div><div class="l">' + h(r[0]) + '</div>')));
+    document.getElementById('statusNote').textContent =
+      health.app + ' ' + health.version + ' — service healthy, server time ' + fmt.dt(health.time);
+  }).catch(function () {
+    document.getElementById('statusNote').textContent =
+      'The API is not reachable. Start the web server (see below) and reload.';
+  });
+</script>
+</body>
+</html>

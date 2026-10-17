@@ -1,0 +1,58 @@
+/* =====================================================================
+   The app module: no third-party libraries at all, so the build works on an
+   offline/air-gapped machine that only has the Android SDK installed.
+   ===================================================================== */
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.kivutracker.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.kivutracker.app'
+        minSdk 23
+        targetSdk 34
+        versionCode 1
+        versionName '1.0.0'
+        resValue 'string', 'server_default', 'http://10.0.2.2:8099'
+    }
+
+    /* Release signing: put android/keystore.properties (see README.md) next to
+       this file. Without it the release APK is unsigned and cannot be installed —
+       build-apk.ps1/.sh therefore create a debug-signed build as a fallback. */
+    signingConfigs {
+        release {
+            def f = rootProject.file('keystore.properties')
+            if (f.exists()) {
+                def p = new Properties(); f.withInputStream { p.load(it) }
+                storeFile rootProject.file(p.storeFile)
+                storePassword p.storePassword
+                keyAlias p.keyAlias
+                keyPassword p.keyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+            if (rootProject.file('keystore.properties').exists()) {
+                signingConfig signingConfigs.release
+            }
+            /* useful when the app is handed out over http on a LAN */
+            manifestPlaceholders = [kivuCleartext: 'true']
+        }
+        debug {
+            applicationIdSuffix '.debug'
+            manifestPlaceholders = [kivuCleartext: 'true']
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    lint { abortOnError false; checkReleaseBuilds false }
+    packaging { resources.excludes += ['META-INF/*'] }
+}

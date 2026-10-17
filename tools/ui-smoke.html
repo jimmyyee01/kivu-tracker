@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UI smoke test (development only)</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<!--
+  =====================================================================
+  tools/ui-smoke.html — development-only browser smoke test.
+
+  It loads the real /admin page markup and scripts, then drives the
+  "New unit" dialog exactly like a user would (leaving the device
+  password blank on purpose) and reports the outcome in #harness-out.
+
+  Run it headlessly (no clicks needed):
+
+    chrome --headless=new --disable-gpu --virtual-time-budget=25000 ^
+      --dump-dom "http://127.0.0.1:8099/tools/ui-smoke.html?token=<token>"
+
+  The token comes from the URL (?token=), which common.js adopts and
+  strips. Serve through the bundled router (php -S … tools/php-router.php)
+  or behind Apache with tools/ blocked from HTTP (see .htaccess).
+  =====================================================================
+-->
+<div id="harness-mount"></div>
+<pre id="harness-out" style="max-width:1000px;margin:12px auto;padding:12px;background:#0b1017;color:#7fd4ff;border:1px solid #263149;border-radius:10px;white-space:pre-wrap"></pre>
+<script>
+  /* pull in the real admin console markup so every id the scripts expect exists */
+  (function () {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/admin', false);
+    xhr.send();
+    var html = xhr.responseText || '';
+    var m = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+    var body = m ? m[1] : html;
+    body = body.replace(/<script[\s\S]*?<\/script>/gi, '');   // the harness loads these itself
+    document.getElementById('harness-mount').innerHTML = body;
+  })();
+</script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/mapcore.js"></script>
+<script src="/js/admin.js"></script>
+<script src="/tools/ui-smoke.js"></script>
+</body>
+</html>
