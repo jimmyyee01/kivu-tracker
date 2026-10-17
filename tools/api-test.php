@@ -408,6 +408,15 @@ check('settings are readable by an account admin', isset(jget($settings['json'],
 check('super admin can save settings', http('PUT', '/api/settings', ['platform_name' => 'KIVU Tracker'], $super)['status'] === 200);
 check('account admin cannot save platform settings (403)',
     http('PUT', '/api/settings', ['platform_name' => 'x'], $admin)['status'] === 403);
+$powered = http('PUT', '/api/settings', ['powered_by' => 'Powered by KIVU'], $super);
+$poweredMeta = http('GET', '/api/meta', null, $admin);
+$poweredHealth = http('GET', '/api/health');
+check('super admin can configure platform footer credit',
+    $powered['status'] === 200 && jget($poweredMeta['json'], 'powered_by') === 'Powered by KIVU'
+        && jget($poweredHealth['json'], 'powered_by') === 'Powered by KIVU');
+check('footer credit rejects text longer than 180 characters',
+    http('PUT', '/api/settings', ['powered_by' => str_repeat('x', 181)], $super)['status'] === 400);
+http('PUT', '/api/settings', ['powered_by' => ''], $super);
 $summary = http('GET', '/api/accounts/acc_acme/summary', null, $super);
 check('account summary returns fleet state', jget(jget($summary['json'], 'fleet', []), 'total') === $baseUnits,
     'counted ' . jget(jget($summary['json'], 'fleet', []), 'total'));

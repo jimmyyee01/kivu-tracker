@@ -438,6 +438,7 @@ CREATE TABLE IF NOT EXISTS settings (
   apk_version    VARCHAR(40)  DEFAULT NULL,                     -- shown on the download page (e.g. 1.0.0)
   apk_notes      VARCHAR(500) DEFAULT NULL,                     -- release notes / what's new
   logo_url       VARCHAR(500) DEFAULT NULL,                     -- platform logo (/img/branding/… or any URL)
+  powered_by     VARCHAR(180) DEFAULT NULL,                     -- optional platform footer credit
   seed           VARCHAR(32)  DEFAULT NULL,
   installed_at   DATETIME     DEFAULT NULL,
   PRIMARY KEY (id)

@@ -211,6 +211,11 @@ The super admin uploads the platform logo in **Accounts → Platform settings �
 * Server-side validation: real image content (`getimagesize`), a strict extension whitelist, the
   512 KB cap, and a refusal for SVGs containing scripts/handlers/iframes.
 
+### Platform footer credit
+The super admin can set optional **Powered by (footer)** text in **Accounts → Platform settings**.
+It is shown as a small footer credit across public pages and consoles; leave it blank to hide it.
+The value is plain text (up to 180 characters), not HTML.
+
 ### Platform reports for the super admin (`/super` → *Financial reports*)
 Four platform-wide reports, all range-filtered (`?from=…&to=…`) and exportable
 (`?format=csv`, downloaded through the authenticated blob helper):

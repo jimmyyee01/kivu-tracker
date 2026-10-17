@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', async function () {
   const p = data.payment;
   $('#brand').textContent = (State.meta && State.meta.platform) || data.platform || 'KIVU Tracker';
   brandingRemember(data.logo || '');
+  setPoweredBy(data.powered_by || '');
   applyBranding();
   $('#invoiceNo').textContent = p.invoice_no;
   $('#planName').textContent = (data.plan && data.plan.name) || '—';

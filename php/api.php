@@ -159,6 +159,7 @@ function h_health($user, $p): array {
     return ['ok' => true, 'app' => APP_NAME, 'version' => APP_VERSION, 'php' => PHP_VERSION,
         'time' => date('c'), 'database' => $dbOk ? 'ok' : 'error', 'driver' => db()->getAttribute(PDO::ATTR_DRIVER_NAME),
         'platform' => setting('platform_name', APP_NAME), 'logo' => branding_logo_url(),
+        'powered_by' => trim((string)setting('powered_by', '')),
         'counters' => ['units' => $units, 'messages' => $messages],
         'ips_port' => (int)setting('ips_port', 20332)];
 }
@@ -180,6 +181,7 @@ function app_download_info(): array {
     return [
         'name' => setting('platform_name', APP_NAME) . ' for Android',
         'logo' => branding_logo_url(),
+        'powered_by' => trim((string)setting('powered_by', '')),
         'package' => 'com.kivutracker.app',
         'version' => trim((string)setting('apk_version', '')) ?: '1.0.0',
         'min_android' => '6.0 (API 23)', 'target_android' => '14 (API 34)',
@@ -220,6 +222,7 @@ function h_meta($user, $p): array {
     $shared = [
         'platform' => setting('platform_name', APP_NAME),
         'logo' => branding_logo_url(),
+        'powered_by' => trim((string)setting('powered_by', '')),
         'map_tiles' => setting('map_tiles'),
         'defaults' => ['lat' => (float)setting('default_lat', -1.2921), 'lon' => (float)setting('default_lon', 36.8219),
             'zoom' => (int)setting('default_zoom', 11)],

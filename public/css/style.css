@@ -269,18 +269,7 @@ table.data tfoot td { font-weight: 700; background: var(--bg-soft); }
 .auth-copy h1 { margin: 20px 0 14px; font-size: clamp(40px, 5vw, 66px); line-height: 1.02; letter-spacing: -2px; font-weight: 600; }
 .auth-copy p { max-width: 400px; margin: 0; color: #a8bbc7; font-size: 15px; line-height: 1.75; }
 .auth-map { position: relative; width: min(100%, 620px); margin: auto auto 10px; }
-.auth-map svg { display: block; width: 100%; overflow: visible; }
-.auth-map-road { fill: none; stroke: rgba(162, 194, 200, .19); stroke-width: 13; stroke-linecap: round; }
-.auth-map-road.secondary { stroke-width: 8; }
-.auth-map-route { fill: none; stroke: #48cfb2; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 8 10; }
-.auth-map-point { fill: #162f3d; stroke: #6edbc6; stroke-width: 3; }
-.auth-map-point.current { fill: rgba(72, 207, 178, .17); stroke: rgba(72, 207, 178, .45); stroke-width: 9; }
-.auth-map-vehicle { fill: #fff; stroke: #fff; stroke-width: 1.5; stroke-linecap: round; }
-.auth-map-vehicle rect { fill: #38b89f; stroke: #fff; }
-.auth-map-label { position: absolute; right: 6%; bottom: 12%; display: flex; gap: 8px; align-items: center;
-  color: #a8c4cc; font-size: 9px; font-weight: 700; letter-spacing: 1px; }
-.auth-map-label > span:nth-child(2) { color: #597785; }
-.auth-map-pulse { width: 6px; height: 6px; border-radius: 50%; background: #45d2a6; box-shadow: 0 0 10px #45d2a6; }
+.auth-map img { display: block; width: 100%; height: auto; }
 .auth-visual-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; color: #7793a0; font-size: 9px; font-weight: 700; letter-spacing: 1px; }
 .auth-visual-footer i { width: 3px; height: 3px; border-radius: 50%; background: #48cfb2; }
 .auth-main { display: grid; place-items: center; min-height: 100vh; padding: 46px clamp(28px, 6vw, 96px); }
@@ -333,6 +322,15 @@ table.data tfoot td { font-weight: 700; background: var(--bg-soft); }
   .auth-mobile-brand .auth-brand-name { font-size: 17px; }
   .auth-welcome h2 { font-size: 26px; }
   .auth-server-note code { margin-left: 30px; }
+}
+.platform-powered-by {
+  position: fixed; z-index: 39; left: 14px; bottom: 6px; max-width: min(60vw, 520px);
+  padding: 3px 8px; overflow: hidden; color: #a6b4c4; background: rgba(15, 20, 32, .78);
+  border-radius: 5px; font-size: 10px; line-height: 1.4; text-align: left;
+  text-overflow: ellipsis; white-space: nowrap; pointer-events: none;
+}
+[data-theme="light"] .platform-powered-by, .auth-page .platform-powered-by {
+  color: #64748b; background: rgba(243, 246, 250, .9);
 }
 .hint { font-size: 12px; color: var(--dim); }
 .demo-logins { display: grid; gap: 6px; margin-top: 14px; }

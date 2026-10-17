@@ -21,6 +21,7 @@ document.addEventListener('DOMContentLoaded', async function () {
   }
   renderApp(data.app || {});
   brandingRemember((data.app || {}).logo || '');
+  setPoweredBy((data.app || {}).powered_by || '');
   applyBranding();
 });
 

@@ -291,7 +291,7 @@ function h_settings_save($user, $p): array {
     $allowed = ['platform_name', 'company_name', 'support_email', 'default_currency', 'map_tiles',
         'default_lat', 'default_lon', 'default_zoom', 'online_timeout_s', 'moving_speed_kmh',
         'retention_days', 'ips_port', 'theme_mode', 'portal_price',
-        'apk_url', 'apk_version', 'apk_notes', 'logo_url'];
+        'apk_url', 'apk_version', 'apk_notes', 'logo_url', 'powered_by'];
     $fields = [];
     foreach ($allowed as $k) {
         $v = bval($k, null);
@@ -300,6 +300,10 @@ function h_settings_save($user, $p): array {
         elseif (in_array($k, ['default_zoom', 'online_timeout_s', 'retention_days', 'ips_port'], true)) $fields[$k] = (int)$v;
         elseif ($k === 'portal_price') $fields[$k] = max(0, (float)$v);
         else $fields[$k] = trim((string)$v);
+        if ($k === 'powered_by') {
+            $chars = preg_match_all('/./us', $fields[$k]);
+            need($chars !== false && $chars <= 180, 'Powered by text must be 180 characters or fewer');
+        }
     }
     /* theme policy: everyone chooses, or the platform is locked to one theme */
     if (isset($fields['theme_mode'])

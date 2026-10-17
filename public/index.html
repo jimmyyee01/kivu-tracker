@@ -113,6 +113,7 @@ php tools/api-test.php http://127.0.0.1:8099</pre>
 <script>
   API.get('/api/health', { silent: true }).then(function (health) {
     brandingRemember(health.logo || '');
+    setPoweredBy(health.powered_by || '');
     applyBranding();
     const box = document.getElementById('stats');
     box.innerHTML = '';

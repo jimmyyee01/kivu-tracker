@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', async function () {
   Register.assetTypes = data.asset_types || {};
   if (data.platform) $('#brand').textContent = data.platform;
   brandingRemember(data.logo || '');
+  setPoweredBy(data.powered_by || '');
   applyBranding();
   $('#trialBadge').textContent = Register.trialDays + '-day';
   renderAssetTypes();

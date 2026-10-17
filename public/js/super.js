@@ -943,6 +943,7 @@ async function loadSettings() {
     ['platform_name', 'Platform name', 'text'],
     ['company_name', 'Company / operator', 'text'],
     ['support_email', 'Support e-mail', 'text'],
+    ['powered_by', 'Powered by (footer)', 'textarea'],
     ['default_currency', 'Default currency', 'text'],
     ['map_tiles', 'Map tile URL ({z}/{x}/{y})', 'text'],
     ['default_lat', 'Map centre latitude', 'number'],
@@ -960,10 +961,16 @@ async function loadSettings() {
   fields.forEach(f => {
     const w = el('div', { class: 'field' });
     w.appendChild(el('label', null, h(f[1])));
-    const inp = el('input', { type: f[2], name: f[0], step: 'any' });
+    const inp = f[2] === 'textarea'
+      ? el('textarea', { name: f[0], rows: '2', maxlength: '180',
+          placeholder: 'e.g. Powered by Acme Telematics' })
+      : el('input', { type: f[2], name: f[0], step: 'any' });
     const v = Super.settings[f[0]];
     inp.value = v === undefined || v === null ? '' : v;
     w.appendChild(inp);
+    if (f[0] === 'powered_by') {
+      w.appendChild(el('div', { class: 'hint' }, 'Optional short text shown in the footer across the platform (180 characters max).'));
+    }
     box.appendChild(w);
   });
   /* theme policy: "user" allows the dark/light switch, dark/light locks it */
@@ -981,6 +988,7 @@ async function saveSettings() {
     const res = await API.put('/api/settings', readForm($('#settingsForm')));
     toast(res.message || 'Settings saved', 'ok');
     Super.settings = res.settings;
+    setPoweredBy(Super.settings.powered_by || '');
   } catch (e) { /* shown */ }
 }
 

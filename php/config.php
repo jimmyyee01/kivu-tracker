@@ -109,6 +109,8 @@ function ensure_columns(): void {
             'apk_notes' => 'VARCHAR(500) DEFAULT NULL',
             /* platform logo: an uploaded file under /img/branding/ or any URL */
             'logo_url' => 'VARCHAR(500) DEFAULT NULL',
+            /* optional platform-wide footer credit */
+            'powered_by' => 'VARCHAR(180) DEFAULT NULL',
         ],
     ];
     foreach ($want as $table => $cols) {

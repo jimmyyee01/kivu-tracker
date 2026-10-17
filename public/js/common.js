@@ -501,6 +501,7 @@ const State = {
 async function loadMeta() {
   State.meta = await API.get('/api/meta');
   State.user = State.meta.user;
+  setPoweredBy(State.meta.powered_by || '');
   State.units = State.meta.units || [];
   State.groups = State.meta.groups || [];
   State.geofences = State.meta.geofences || [];
@@ -587,6 +588,28 @@ function applyBranding(root) {
   updateSupportAssistantLogo();
 }
 document.addEventListener('DOMContentLoaded', () => { try { applyBranding(); } catch (e) { /* ignore */ } });
+
+function setPoweredBy(value) {
+  const text = String(value || '').trim();
+  store.set('poweredBy', text);
+  renderPoweredBy(text);
+}
+function renderPoweredBy(value) {
+  const text = String(value || '').trim();
+  let footer = document.getElementById('platformPoweredBy');
+  if (!text) {
+    if (footer) footer.remove();
+    return;
+  }
+  if (!footer) {
+    footer = el('footer', { id: 'platformPoweredBy', class: 'platform-powered-by', role: 'contentinfo' });
+    document.body.appendChild(footer);
+  }
+  footer.textContent = text;
+}
+document.addEventListener('DOMContentLoaded', () => {
+  renderPoweredBy(store.get('poweredBy', ''));
+});
 
 /* In-app client support. Answers are local guidance only; questions and account
    data are never sent to an external AI service. */

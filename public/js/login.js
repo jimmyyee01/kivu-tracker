@@ -47,6 +47,7 @@
       document.title = 'Sign in — ' + info.app;
       $('#subtitle').textContent = 'GPS tracking & fleet management console v' + info.version;
       brandingRemember(info.logo || '');
+      setPoweredBy(info.powered_by || '');
       applyBranding();
       $('#ipsPort').textContent = info.ips_port;
     }

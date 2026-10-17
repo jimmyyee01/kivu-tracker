@@ -57,7 +57,8 @@ function h_plans_public($user, $p): array {
         'asset_types' => asset_types(),
         'currency' => setting('default_currency', 'USD'),
         'platform' => setting('platform_name', APP_NAME),
-        'logo' => branding_logo_url()];
+        'logo' => branding_logo_url(),
+        'powered_by' => trim((string)setting('powered_by', ''))];
 }
 
 /* Self-service registration: account + admin user + free trial, signed in. */
@@ -91,6 +92,7 @@ function h_pay_public($user, $p): array {
     return ['payment' => payment_public($pay), 'account' => $account ? $account['name'] : '',
         'plan' => $plan ? plan_public($plan) : null,
         'platform' => setting('platform_name', APP_NAME), 'logo' => branding_logo_url(),
+        'powered_by' => trim((string)setting('powered_by', '')),
         'simulated' => $pay['gateway'] === 'sandbox',
         'gateway_label' => payment_gateways()[$pay['gateway']]['label'] ?? $pay['gateway']];
 }
