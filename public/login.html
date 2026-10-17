@@ -6,41 +6,85 @@
 <title>Sign in — KIVU Tracker</title>
 <link rel="stylesheet" href="/css/style.css">
 </head>
-<body>
-<div class="login-wrap">
-  <div class="login-card">
-    <div class="brand row" style="margin-bottom:14px">
-      <span class="logo"></span>
-      <h1 id="title" style="margin:0">KIVU Tracker</h1>
+<body class="auth-page">
+<main class="auth-shell">
+  <section class="auth-visual" aria-label="Fleet tracking platform">
+    <div class="auth-visual-inner">
+      <div class="auth-brand brand">
+        <span class="logo"></span>
+        <span class="auth-brand-name" id="title">KIVU Tracker</span>
+      </div>
+      <div class="auth-copy">
+        <span class="auth-eyebrow"><span class="auth-live-dot"></span> FLEET VISIBILITY, IN REAL TIME</span>
+        <h1>Your fleet.<br>In focus.</h1>
+        <p>One clear view of your vehicles, activity and operations — wherever the road takes them.</p>
+      </div>
+      <div class="auth-map" aria-hidden="true">
+        <svg viewBox="0 0 620 330" role="presentation">
+          <path class="auth-map-road" d="M-20 254 C80 214 84 132 185 148 S296 254 371 200 452 62 640 85"/>
+          <path class="auth-map-road secondary" d="M94-20 C154 53 222 66 252 126s-5 104 65 146 135 14 168 78"/>
+          <path class="auth-map-route" d="M-20 254 C80 214 84 132 185 148 S296 254 371 200 452 62 640 85"/>
+          <circle class="auth-map-point" cx="185" cy="148" r="6"/>
+          <circle class="auth-map-point" cx="371" cy="200" r="6"/>
+          <circle class="auth-map-point current" cx="452" cy="102" r="10"/>
+          <g class="auth-map-vehicle" transform="translate(444 94)">
+            <rect x="-7" y="-5" width="14" height="18" rx="4"/>
+            <path d="M-3 -2h6M-3 8h6"/>
+          </g>
+        </svg>
+        <div class="auth-map-label"><span class="auth-map-pulse"></span> LIVE TRACKING <span>·</span> CONNECTED</div>
+      </div>
+      <div class="auth-visual-footer">
+        <span>LIVE MONITORING</span><i></i><span>SMART REPORTING</span><i></i><span>FLEET CONTROL</span>
+      </div>
     </div>
-    <p class="muted small" id="subtitle">GPS tracking &amp; fleet management console</p>
+  </section>
 
-    <form id="loginForm" autocomplete="on">
-      <div class="field">
-        <label for="username">Username or e-mail</label>
-        <input type="text" id="username" name="username" autocomplete="username" autofocus required>
+  <section class="auth-main" aria-label="Sign in">
+    <div class="auth-card">
+      <div class="auth-mobile-brand brand">
+        <span class="logo"></span>
+        <span class="auth-brand-name">KIVU Tracker</span>
       </div>
-      <div class="field">
-        <label for="password">Password</label>
-        <input type="password" id="password" name="password" autocomplete="current-password" required>
+      <div class="auth-welcome">
+        <span class="auth-eyebrow">WELCOME BACK</span>
+        <h2>Sign in to your account</h2>
+        <p id="subtitle">GPS tracking &amp; fleet management console</p>
       </div>
-      <button class="btn primary" id="submitBtn" type="submit" style="width:100%;justify-content:center">Sign in</button>
-      <p class="hint" id="error" style="color:#ff9c93;margin-top:10px"></p>
-      <p class="hint" style="margin-top:12px">New fleet?
-        <a href="/register">Start a 5-day free trial</a> — no card needed.</p>
-    </form>
 
-    <details style="margin-top:18px">
-      <summary class="muted small" style="cursor:pointer">Demo accounts (created by install.php)</summary>
-      <div class="demo-logins" id="demoLogins"></div>
-    </details>
+      <form id="loginForm" autocomplete="on">
+        <div class="field">
+          <label for="username">Username or e-mail</label>
+          <input type="text" id="username" name="username" autocomplete="username" autofocus required placeholder="Enter your username or e-mail">
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" autocomplete="current-password" required placeholder="Enter your password">
+        </div>
+        <button class="btn primary auth-submit" id="submitBtn" type="submit">Sign in <span aria-hidden="true">→</span></button>
+        <p class="auth-error" id="error" role="alert" aria-live="polite"></p>
+      </form>
 
-    <p class="hint" style="margin-top:16px">
-      Devices connect to the Wialon IPS server on TCP port <b id="ipsPort">20332</b> —
-      start it with <code>php php/tracker.php</code>.
-    </p>
-  </div>
-</div>
+      <div class="auth-register">
+        <span>New to KIVU Tracker?</span>
+        <a href="/register">Start your 5-day free trial <span aria-hidden="true">→</span></a>
+        <small>No credit card required</small>
+      </div>
+
+      <details class="auth-demo">
+        <summary>Demo accounts <span>· created by install.php</span></summary>
+        <div class="demo-logins" id="demoLogins"></div>
+      </details>
+
+      <div class="auth-server-note">
+        <span class="auth-server-icon" aria-hidden="true">↗</span>
+        <span>Device gateway <b>TCP <span id="ipsPort">20332</span></b></span>
+        <code>php php/tracker.php</code>
+      </div>
+      <p class="auth-legal">Protected access to your fleet operations.</p>
+    </div>
+  </section>
+</main>
 <script src="/js/common.js"></script>
 <script src="/js/login.js"></script>
 </body>

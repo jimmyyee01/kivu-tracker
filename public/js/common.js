@@ -545,6 +545,7 @@ function brandingLogo() {
 }
 function brandingRemember(logo) {
   if (logo !== undefined && logo !== null) store.set('logo', String(logo));
+  updateSupportAssistantLogo();
 }
 function brandingSig() {          /* cache-buster so a replaced file is not stale */
   const l = brandingLogo();
@@ -583,8 +584,138 @@ function applyBranding(root) {
     if (icon) icon.remove();
     if (touch) touch.remove();
   }
+  updateSupportAssistantLogo();
 }
 document.addEventListener('DOMContentLoaded', () => { try { applyBranding(); } catch (e) { /* ignore */ } });
+
+/* In-app client support. Answers are local guidance only; questions and account
+   data are never sent to an external AI service. */
+function supportAnswer(question) {
+  const q = question.toLowerCase();
+  if (/\b(hello|hi|hey)\b/.test(q)) {
+    return 'Hi! I can guide you through common KIVU Tracker tasks. Choose a suggested question or ask about devices, users, reports, login, or billing.';
+  }
+  if (/\b(viewer|view.?only|read.?only|permission|permissions|rights|unit access)\b/.test(q)) {
+    return 'An account admin can open Administration → Users, create or edit a user, choose “viewer — read only”, and select the units they may see. Leave unit access unselected to allow all units in that account. Viewers can read but cannot make changes.';
+  }
+  if (/\b(gps|tracker|device|imei|offline|connect|not reporting)\b/.test(q)) {
+    return 'Add the vehicle under Administration → Units → New unit. Enter its device ID and matching device password. For the built-in Wialon IPS 1.1 server, configure the tracker to send TCP to your server on port 20332; confirm the tracker supports IPS, the daemon is running, and TCP 20332 is open. Other protocols need a compatible gateway.';
+  }
+  if (/\b(report|export|csv|trip)\b/.test(q)) {
+    return 'Open Reports to choose a report type and time range. Run the report, then use its CSV export option when available. Reports only include units you are allowed to access.';
+  }
+  if (/\b(bill|billing|payment|invoice|trial|subscription|plan)\b/.test(q)) {
+    return 'Open Billing to check your plan, trial or subscription, invoices, and payment options. If your account is expired or payment is blocked, ask your account administrator for help.';
+  }
+  if (/\b(user|users|account|invite|create)\b/.test(q)) {
+    return 'An account admin can manage users in Administration → Users. Create a user, assign a role, and optionally limit access to selected units. Only a platform super-admin can manage other accounts.';
+  }
+  if (/\b(login|log in|sign in|password|locked out)\b/.test(q)) {
+    return 'Check that you are using your KIVU Tracker username and password at the sign-in page. If you forgot your password, ask your account administrator to reset it; never share your password in this support panel.';
+  }
+  return 'I’m the in-app help guide, not a live AI agent. I can help with device setup, read-only users, reports, login, and billing. Please don’t enter passwords, GPS locations, or other sensitive information here. For account-specific help, contact your account administrator.';
+}
+
+function initSupportAssistant() {
+  if (document.getElementById('supportAssistant')) return;
+  const root = el('aside', { id: 'supportAssistant', class: 'support-assistant no-print' });
+  const toggle = el('button', { id: 'supportAssistantToggle', class: 'support-toggle', type: 'button',
+    'aria-label': 'Open KIVU Tracker support assistant', 'aria-expanded': 'false', 'aria-controls': 'supportAssistantPanel' });
+  toggle.appendChild(el('span', { id: 'supportAssistantFallback', class: 'support-toggle-mark',
+    'aria-hidden': 'true', text: 'K' }));
+  toggle.appendChild(el('img', { id: 'supportAssistantLogo', class: 'support-toggle-logo',
+    alt: '', hidden: 'hidden', 'aria-hidden': 'true' }));
+  const panel = el('section', { id: 'supportAssistantPanel', class: 'support-panel', hidden: 'hidden',
+    'aria-label': 'KIVU Tracker support assistant', role: 'region' });
+  const heading = el('div', { class: 'support-heading' });
+  const title = el('div');
+  title.appendChild(el('strong', { text: 'KIVU Support' }));
+  title.appendChild(el('span', { class: 'support-status', text: 'In-app help guide · not live AI' }));
+  heading.appendChild(title);
+  const close = el('button', { class: 'support-close', type: 'button', text: 'Close',
+    'aria-label': 'Close support assistant' });
+  heading.appendChild(close);
+  panel.appendChild(heading);
+
+  const messages = el('div', { class: 'support-messages', role: 'log', 'aria-live': 'polite', 'aria-relevant': 'additions' });
+  messages.appendChild(el('p', { class: 'support-message assistant', text:
+    'Hello! I can point you to common tasks in KIVU Tracker. Choose a question or type what you need help with.' }));
+  panel.appendChild(messages);
+
+  const suggestions = el('div', { class: 'support-suggestions', 'aria-label': 'Suggested questions' });
+  [
+    'How do I add a GPS tracker?',
+    'How do I give someone view-only access?',
+    'Where can I find reports?'
+  ].forEach(text => {
+    const button = el('button', { type: 'button', class: 'support-suggestion', text: text });
+    button.addEventListener('click', () => askSupportQuestion(text));
+    suggestions.appendChild(button);
+  });
+  panel.appendChild(suggestions);
+
+  const form = el('form', { class: 'support-form' });
+  const input = el('input', { id: 'supportQuestion', type: 'text', maxlength: '240',
+    placeholder: 'Ask about using the system…', 'aria-label': 'Ask a support question', autocomplete: 'off' });
+  const send = el('button', { type: 'submit', class: 'btn primary sm', text: 'Ask' });
+  form.appendChild(input);
+  form.appendChild(send);
+  panel.appendChild(form);
+  panel.appendChild(el('p', { class: 'support-privacy', text:
+    'Answers are built in. Don’t enter passwords or sensitive data; nothing is sent to an AI service.' }));
+  root.appendChild(panel);
+  root.appendChild(toggle);
+  document.body.appendChild(root);
+  updateSupportAssistantLogo();
+
+  function setOpen(open) {
+    panel.hidden = !open;
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) input.focus();
+    else toggle.focus();
+  }
+  toggle.addEventListener('click', () => setOpen(panel.hidden));
+  close.addEventListener('click', () => setOpen(false));
+  panel.addEventListener('keydown', event => {
+    if (event.key === 'Escape') { event.preventDefault(); setOpen(false); }
+  });
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    askSupportQuestion(input.value);
+    input.value = '';
+    input.focus();
+  });
+
+  function askSupportQuestion(question) {
+    const text = String(question || '').trim();
+    if (!text) { input.focus(); return; }
+    messages.appendChild(el('p', { class: 'support-message user', text: text }));
+    messages.appendChild(el('p', { class: 'support-message assistant', text: supportAnswer(text) }));
+    messages.scrollTop = messages.scrollHeight;
+  }
+}
+function updateSupportAssistantLogo() {
+  const image = document.getElementById('supportAssistantLogo');
+  const fallback = document.getElementById('supportAssistantFallback');
+  if (!image || !fallback) return;
+  const logo = brandingLogo();
+  if (!logo) {
+    image.hidden = true;
+    fallback.hidden = false;
+    image.removeAttribute('src');
+    return;
+  }
+  const src = logo + brandingSig();
+  if (image.getAttribute('src') !== src) {
+    image.onload = () => { image.hidden = false; fallback.hidden = true; };
+    image.onerror = () => { image.hidden = true; fallback.hidden = false; };
+    image.src = src;
+  } else if (image.complete && image.naturalWidth > 0) {
+    image.hidden = false;
+    fallback.hidden = true;
+  }
+}
+document.addEventListener('DOMContentLoaded', initSupportAssistant);
 
 /* ---------------------------------------------------------------- top bar */
 function renderTopBar(active) {

@@ -51,6 +51,13 @@ Then open `http://127.0.0.1:8099/` — the landing page links to every console:
 | `/download` | **Android app download** — version, size, SHA-256, install steps (public; also in the top bar as *Get the app*) |
 | `/login` | Sign in |
 
+### In-app client support
+Every page includes a small support button at the lower-right edge. It opens a keyboard-accessible
+help panel with quick guidance for tracker setup, user roles, reports, login and billing. The button
+uses the configured platform logo when available and keeps the same colors in dark and light themes.
+This is a built-in help guide, not a live AI service: questions stay in the browser and are not sent
+to an external provider. Users should not enter passwords or other sensitive information in the panel.
+
 ### Demo accounts (created by `install.php`)
 
 | Role | Username | Password | Sees |
