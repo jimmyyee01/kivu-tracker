@@ -464,7 +464,7 @@ function demo_seed_plans(): string {
         }
         db()->prepare('INSERT INTO plans (id,code,name,tagline,price,currency,`interval`,unit_limit,
                        extra_unit_price,storage_days,trial_days,features_json,sort_order,enabled,created_at)
-                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,?)')
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,?)')
             ->execute([$id, $code, $name, $tagline, $price, $cur, $interval, $limit, $extra, $storage, $trial,
                 jenc($features), $order, now_dt()]);
         $made++;
