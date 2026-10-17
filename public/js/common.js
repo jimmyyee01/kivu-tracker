@@ -746,6 +746,23 @@ function renderTopBar(active) {
   const bar = el('div', { class: 'topbar no-print' });
   bar.appendChild(el('div', { class: 'brand' }, '<span class="logo"></span><span>'
     + h((State.meta && State.meta.platform) || 'KIVU Tracker') + '</span>'));
+  const nav = el('nav', { class: 'topbar-nav', id: 'primaryNavigation', 'aria-label': 'Main navigation' });
+  const navToggle = el('button', {
+    class: 'btn sm ghost nav-toggle', type: 'button', 'aria-expanded': 'false',
+    'aria-controls': 'primaryNavigation', 'aria-label': 'Open navigation menu'
+  }, 'Menu');
+  navToggle.addEventListener('click', () => {
+    const expanded = bar.classList.toggle('mobile-open');
+    navToggle.setAttribute('aria-expanded', String(expanded));
+    navToggle.setAttribute('aria-label', expanded ? 'Close navigation menu' : 'Open navigation menu');
+  });
+  nav.addEventListener('click', event => {
+    if (!event.target.closest('a')) return;
+    bar.classList.remove('mobile-open');
+    navToggle.setAttribute('aria-expanded', 'false');
+    navToggle.setAttribute('aria-label', 'Open navigation menu');
+  });
+  bar.appendChild(navToggle);
   const links = [
     { href: '/app', label: 'Monitoring', match: 'app', roles: ['super', 'admin', 'operator', 'viewer'] },
     { href: '/reports', label: 'Reports', match: 'reports', roles: ['super', 'admin', 'operator', 'viewer'] },
@@ -758,8 +775,9 @@ function renderTopBar(active) {
   ];
   links.forEach(l => {
     if (l.roles.indexOf(role) < 0) return;
-    bar.appendChild(el('a', { class: 'navlink' + (active === l.match ? ' active' : ''), href: l.href }, h(l.label)));
+    nav.appendChild(el('a', { class: 'navlink' + (active === l.match ? ' active' : ''), href: l.href }, h(l.label)));
   });
+  bar.appendChild(nav);
   bar.appendChild(el('div', { class: 'spacer' }));
   /* theme switch — rendered always, hidden when the super admin locked the
      theme (theme_mode = dark / light disables both modes platform-wide) */
