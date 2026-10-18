@@ -8,6 +8,14 @@ data/*.out
 # uploaded files (if you add uploads later)
 uploads/
 
+# Android build outputs and local signing configuration
+/android/.gradle/
+/android/app/build/
+/android/local.properties
+/android/keystore.properties
+/android/*.jks
+/public/download/*.apk
+
 # editor / OS noise
 .DS_Store
 Thumbs.db
