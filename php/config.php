@@ -11,7 +11,7 @@ declare(strict_types=1);
 define('DB_HOST', '127.0.0.1');
 define('DB_NAME', 'kivu_tracker');
 define('DB_USER', 'root');
-define('DB_PASS', '');
+define('DB_PASS', 'panzi@123');
 
 define('SESSION_DAYS', 7);
 define('APP_ROOT', dirname(__DIR__));
