@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kivu HealthConnect — Tele-Nursing & Care</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div id="topbar"></div>
+<main class="container pad" id="healthApp" style="max-width:1200px;margin:0 auto">
+  <div class="row wrap" style="align-items:flex-end;gap:12px;margin:12px 0">
+    <div><h1 style="margin:0">HealthConnect</h1><p class="hint">Tele-nursing scheduling, patient vitals, care plans and secure messaging. Sensitive data: access is role-scoped and audited.</p></div>
+    <span class="spacer" style="flex:1"></span>
+    <button class="btn sm" id="hcRefresh">Refresh</button>
+  </div>
+  <div class="stats" id="hcSummary"></div>
+  <div class="tabs" id="hcTabs" style="margin-top:14px">
+    <div class="tab active" data-pane="hcPatients">Patients</div>
+    <div class="tab" data-pane="hcAppts">Appointments</div>
+    <div class="tab" data-pane="hcVitals">Vitals</div>
+    <div class="tab" data-pane="hcPlans">Care plans</div>
+    <div class="tab" data-pane="hcMsgs">Messages</div>
+  </div>
+  <div class="tabbody">
+    <div class="tabpane active" id="hcPatients"><div class="row wrap" style="margin:10px 0"><input id="hcSearch" placeholder="Search patient/MRN/phone" style="max-width:280px"><button class="btn primary sm" id="hcNewPatient">+ Patient</button></div><div id="hcPatientsTable"></div></div>
+    <div class="tabpane" id="hcAppts"><div class="row wrap" style="margin:10px 0"><button class="btn primary sm" id="hcNewAppt">+ Appointment</button></div><div id="hcApptsTable"></div></div>
+    <div class="tabpane" id="hcVitals"><div class="row wrap" style="margin:10px 0"><select id="hcVitalsPatient" style="max-width:320px"></select><button class="btn primary sm" id="hcNewVital">+ Vitals log</button></div><div id="hcVitalsTable"></div></div>
+    <div class="tabpane" id="hcPlans"><div class="row wrap" style="margin:10px 0"><button class="btn primary sm" id="hcNewPlan">+ Care plan</button></div><div id="hcPlansTable"></div></div>
+    <div class="tabpane" id="hcMsgs"><div class="row wrap" style="margin:10px 0"><select id="hcMsgPatient" style="max-width:320px"></select><button class="btn primary sm" id="hcNewMsg">+ Message</button></div><div id="hcMsgsTable"></div></div>
+  </div>
+</main>
+<script src="/js/common.js"></script>
+<script src="/js/health.js"></script>
+</body>
+</html>

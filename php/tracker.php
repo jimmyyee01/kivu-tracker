@@ -199,7 +199,8 @@ function tracker_handle_packet(array &$clients, int $cid, string $packet): void 
             }
             break;
         default:
-            tlog('WARN unparsed packet from ' . $clients[$cid]['ip'] . ': ' . substr($packet, 0, 120));
+            tlog('WARN unparsed packet from ' . $clients[$cid]['ip'] . ' len=' . strlen($packet)
+                . ' hex=' . bin2hex(substr($packet, 0, 240)));
     }
 }
 

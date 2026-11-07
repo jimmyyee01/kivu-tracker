@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS accounts (
   billing_country VARCHAR(64)  DEFAULT NULL,
   auto_renew      TINYINT      NOT NULL DEFAULT 1,   -- charge the saved method at renewal
   default_asset_type VARCHAR(32) DEFAULT NULL,        -- captured at registration (lorry, motorcycle, …)
+  default_module_id  INT UNSIGNED DEFAULT NULL,       -- preferred business module
+  enabled_modules_json LONGTEXT DEFAULT NULL,          -- JSON array of enabled module slugs for this account
   billing_email VARCHAR(160) DEFAULT NULL,
   signup_ip     VARCHAR(64)  DEFAULT NULL,
   signup_source VARCHAR(20)  DEFAULT NULL,                       -- self|admin
@@ -424,6 +426,9 @@ CREATE TABLE IF NOT EXISTS settings (
   default_lon    DECIMAL(10,7) NOT NULL DEFAULT 36.8219000,
   default_zoom   INT          NOT NULL DEFAULT 11,
   online_timeout_s   INT      NOT NULL DEFAULT 300,
+  offline_alert_min  INT      NOT NULL DEFAULT 10,             -- alert when a unit is silent this long (minutes; 0 = per-rule value)
+  default_module_slug VARCHAR(64) NOT NULL DEFAULT 'telematics',
+  modules_enabled TINYINT      NOT NULL DEFAULT 1,
   moving_speed_kmh   DECIMAL(6,2) NOT NULL DEFAULT 5,
   retention_days INT          NOT NULL DEFAULT 90,
   ips_port       INT          NOT NULL DEFAULT 20332,
@@ -594,6 +599,297 @@ CREATE TABLE IF NOT EXISTS billing_reminders (
   PRIMARY KEY (id),
   UNIQUE KEY uq_reminder_cycle (account_id, kind, cutoff_at),
   KEY idx_reminder_account (account_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ------------------------------------------------------------------- cms --
+-- Content management for the public website (landing page, manual, extra
+-- pages). A page is a list of ordered blocks; php/cms.php renders them to
+-- HTML at /p/<slug> (and at / when is_home = 1). The manager itself lives at
+-- /cms, is super-admin only, and is deliberately unreachable from the
+-- Android app (cms_is_mobile_app() in php/routes_cms.php).
+CREATE TABLE IF NOT EXISTS cms_pages (
+  id           VARCHAR(32)  NOT NULL,
+  account_id   VARCHAR(32)  DEFAULT NULL,                -- NULL = the platform site, else that account's content
+  slug         VARCHAR(64)  NOT NULL,                    -- /p/<slug> (platform) or /p/<account>/<slug>
+  title        VARCHAR(160) NOT NULL,
+  type         VARCHAR(20)  NOT NULL DEFAULT 'custom',   -- landing|help|terms|faq|custom
+  asset_type   VARCHAR(32)  DEFAULT NULL,                -- optional: lorry|motorcycle|car|… (NULL = any)
+  status       VARCHAR(12)  NOT NULL DEFAULT 'draft',    -- draft | published
+  is_home      TINYINT      NOT NULL DEFAULT 0,          -- platform front page: render at /
+  show_in_nav  TINYINT      NOT NULL DEFAULT 0,          -- link it on the public pages
+  meta_desc    VARCHAR(300) DEFAULT NULL,
+  sort_order   INT          NOT NULL DEFAULT 100,
+  created_at   DATETIME     DEFAULT NULL,
+  updated_at   DATETIME     DEFAULT NULL,
+  updated_by   VARCHAR(80)  DEFAULT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_cms_slug (account_id, slug),
+  KEY ix_cms_status (status, sort_order),
+  KEY ix_cms_account (account_id, type, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS cms_blocks (
+  id         VARCHAR(32)  NOT NULL,
+  page_id    VARCHAR(32)  NOT NULL,
+  kind       VARCHAR(16)  NOT NULL DEFAULT 'text',       -- heading|text|feature|button|list|image|quote|code|divider|html
+  title      VARCHAR(200) DEFAULT NULL,
+  body       MEDIUMTEXT   DEFAULT NULL,
+  url        VARCHAR(300) DEFAULT NULL,                  -- button / image target
+  sort_order INT          NOT NULL DEFAULT 100,
+  enabled    TINYINT      NOT NULL DEFAULT 1,
+  created_at DATETIME     DEFAULT NULL,
+  updated_at DATETIME     DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY ix_cms_blocks_page (page_id, sort_order),
+  CONSTRAINT fk_cms_blocks_page FOREIGN KEY (page_id) REFERENCES cms_pages (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ===================================================== business modules --
+-- The platform's verticals (telematics, agriculture, health, and any model
+-- the admin adds). A module drives branding (logo + theme_config), public
+-- navigation (dynamic_pages) and which console features are available.
+CREATE TABLE IF NOT EXISTS business_modules (
+  id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  module_slug  VARCHAR(64)  NOT NULL,
+  module_name  VARCHAR(120) NOT NULL,
+  tagline      TEXT         DEFAULT NULL,
+  logo_path    VARCHAR(500) DEFAULT NULL,
+  theme_config LONGTEXT     DEFAULT NULL,        -- JSON: primary, accent, bg, text, font, mode
+  is_active    TINYINT      NOT NULL DEFAULT 1,
+  sort_order   INT          NOT NULL DEFAULT 100,
+  created_at   DATETIME     DEFAULT NULL,
+  updated_at   DATETIME     DEFAULT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_modules_slug (module_slug),
+  KEY ix_modules_active (is_active, sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Optional host/domain -> module mapping (domain-based multi-tenancy).
+CREATE TABLE IF NOT EXISTS module_domains (
+  id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  module_id  INT UNSIGNED NOT NULL,
+  host       VARCHAR(190) NOT NULL,
+  is_primary TINYINT      NOT NULL DEFAULT 0,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_module_host (host),
+  KEY ix_module_domains_module (module_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Admin-controlled pages and navigation per module.
+CREATE TABLE IF NOT EXISTS dynamic_pages (
+  id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  module_id    INT UNSIGNED NOT NULL,
+  account_id   VARCHAR(32)  DEFAULT NULL,          -- NULL = platform/module default
+  title        VARCHAR(160) NOT NULL,
+  slug         VARCHAR(64)  NOT NULL,
+  content      LONGTEXT     DEFAULT NULL,          -- JSON blocks or HTML (see content_type)
+  content_type VARCHAR(16)  NOT NULL DEFAULT 'blocks',
+  nav_position INT          NOT NULL DEFAULT 100,
+  show_in_nav  TINYINT      NOT NULL DEFAULT 1,
+  status       VARCHAR(12)  NOT NULL DEFAULT 'draft',
+  meta_desc    VARCHAR(300) DEFAULT NULL,
+  updated_by   VARCHAR(80)  DEFAULT NULL,
+  created_at   DATETIME     DEFAULT NULL,
+  updated_at   DATETIME     DEFAULT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_dyn_pages (module_id, account_id, slug),
+  KEY ix_dyn_pages_nav (module_id, status, nav_position)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ================================================ AgriSmart (vertical) --
+CREATE TABLE IF NOT EXISTS agri_farms (
+  id            VARCHAR(32)  NOT NULL,
+  account_id    VARCHAR(32)  NOT NULL,
+  name          VARCHAR(120) NOT NULL,
+  location      VARCHAR(200) DEFAULT NULL,
+  size_ha       DECIMAL(10,2) DEFAULT NULL,
+  owner_name    VARCHAR(120) DEFAULT NULL,
+  notes         TEXT         DEFAULT NULL,
+  created_at    DATETIME     DEFAULT NULL,
+  updated_at    DATETIME     DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY ix_agri_farms_account (account_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS agri_fields (
+  id            VARCHAR(32)  NOT NULL,
+  account_id    VARCHAR(32)  NOT NULL,
+  farm_id       VARCHAR(32)  NOT NULL,
+  name          VARCHAR(120) NOT NULL,
+  crop          VARCHAR(120) DEFAULT NULL,
+  soil_type     VARCHAR(80)  DEFAULT NULL,
+  area_ha       DECIMAL(10,2) DEFAULT NULL,
+  notes         TEXT         DEFAULT NULL,
+  created_at    DATETIME     DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY ix_agri_fields_farm (farm_id),
+  KEY ix_agri_fields_account (account_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS agri_crop_cycles (
+  id            VARCHAR(32)  NOT NULL,
+  account_id    VARCHAR(32)  NOT NULL,
+  field_id      VARCHAR(32)  NOT NULL,
+  crop          VARCHAR(120) NOT NULL,
+  variety       VARCHAR(120) DEFAULT NULL,
+  planted_at    DATE         DEFAULT NULL,
+  expected_harvest DATE      DEFAULT NULL,
+  harvested_at  DATE         DEFAULT NULL,
+  status        VARCHAR(20)  NOT NULL DEFAULT 'planned',  -- planned|growing|harvested|failed
+  yield_qty     DECIMAL(12,2) DEFAULT NULL,
+  yield_unit    VARCHAR(20)  DEFAULT 'kg',
+  notes         TEXT         DEFAULT NULL,
+  created_at    DATETIME     DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY ix_agri_cycles_field (field_id),
+  KEY ix_agri_cycles_account (account_id, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS agri_livestock (
+  id            VARCHAR(32)  NOT NULL,
+  account_id    VARCHAR(32)  NOT NULL,
+  farm_id       VARCHAR(32)  NOT NULL,
+  tag           VARCHAR(64)  DEFAULT NULL,
+  species       VARCHAR(80)  NOT NULL,             -- cattle|goat|sheep|poultry|...
+  breed         VARCHAR(120) DEFAULT NULL,
+  sex           VARCHAR(12)  DEFAULT NULL,
+  birth_date    DATE         DEFAULT NULL,
+  status        VARCHAR(20)  NOT NULL DEFAULT 'active', -- active|sold|deceased
+  weight_kg     DECIMAL(8,2) DEFAULT NULL,
+  notes         TEXT         DEFAULT NULL,
+  created_at    DATETIME     DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY ix_agri_ls_farm (farm_id),
+  KEY ix_agri_ls_account (account_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS agri_inventory (
+  id            VARCHAR(32)  NOT NULL,
+  account_id    VARCHAR(32)  NOT NULL,
+  farm_id       VARCHAR(32)  DEFAULT NULL,
+  item_name     VARCHAR(120) NOT NULL,
+  category      VARCHAR(40)  NOT NULL DEFAULT 'other', -- seed|fertilizer|feed|chemical|equipment|other
+  quantity      DECIMAL(12,2) NOT NULL DEFAULT 0,
+  unit          VARCHAR(20)  DEFAULT 'units',
+  reorder_level DECIMAL(12,2) DEFAULT NULL,
+  cost          DECIMAL(12,2) DEFAULT NULL,
+  supplier      VARCHAR(160) DEFAULT NULL,
+  notes         TEXT         DEFAULT NULL,
+  updated_at    DATETIME     DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY ix_agri_inv_account (account_id, category)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS agri_yields (
+  id            VARCHAR(32)  NOT NULL,
+  account_id    VARCHAR(32)  NOT NULL,
+  farm_id       VARCHAR(32)  DEFAULT NULL,
+  cycle_id      VARCHAR(32)  DEFAULT NULL,
+  product       VARCHAR(120) NOT NULL,
+  quantity      DECIMAL(12,2) NOT NULL DEFAULT 0,
+  unit          VARCHAR(20)  DEFAULT 'kg',
+  harvest_date  DATE         DEFAULT NULL,
+  revenue       DECIMAL(12,2) DEFAULT NULL,
+  notes         TEXT         DEFAULT NULL,
+  created_at    DATETIME     DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY ix_agri_yield_account (account_id, harvest_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================= HealthConnect (vertical) --
+-- NOTE: tele-health data may be regulated (HIPAA/GDPR/local law). Treat as
+-- sensitive: strict RBAC, audit access, consent, retention, and encryption.
+CREATE TABLE IF NOT EXISTS health_patients (
+  id            VARCHAR(32)  NOT NULL,
+  account_id    VARCHAR(32)  NOT NULL,
+  mrn           VARCHAR(40)  DEFAULT NULL,          -- medical record number
+  full_name     VARCHAR(120) NOT NULL,
+  dob           DATE         DEFAULT NULL,
+  sex           VARCHAR(12)  DEFAULT NULL,
+  phone         VARCHAR(40)  DEFAULT NULL,
+  email         VARCHAR(160) DEFAULT NULL,
+  address       VARCHAR(255) DEFAULT NULL,
+  emergency_contact VARCHAR(160) DEFAULT NULL,
+  consent_at    DATETIME     DEFAULT NULL,
+  status        VARCHAR(20)  NOT NULL DEFAULT 'active',
+  notes         TEXT         DEFAULT NULL,
+  created_at    DATETIME     DEFAULT NULL,
+  updated_at    DATETIME     DEFAULT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_health_mrn (account_id, mrn),
+  KEY ix_health_patients_account (account_id, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS health_appointments (
+  id            VARCHAR(32)  NOT NULL,
+  account_id    VARCHAR(32)  NOT NULL,
+  patient_id    VARCHAR(32)  NOT NULL,
+  clinician     VARCHAR(120) DEFAULT NULL,
+  kind          VARCHAR(40)  NOT NULL DEFAULT 'consult', -- consult|followup|tele-nursing|home-visit
+  scheduled_at  DATETIME     NOT NULL,
+  duration_min  INT          NOT NULL DEFAULT 30,
+  status        VARCHAR(20)  NOT NULL DEFAULT 'scheduled', -- scheduled|completed|canceled|no_show
+  channel       VARCHAR(20)  DEFAULT 'video',         -- video|phone|in_person
+  reason        VARCHAR(255) DEFAULT NULL,
+  notes         TEXT         DEFAULT NULL,
+  created_at    DATETIME     DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY ix_health_appt_account (account_id, scheduled_at),
+  KEY ix_health_appt_patient (patient_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS health_vitals (
+  id            VARCHAR(32)  NOT NULL,
+  account_id    VARCHAR(32)  NOT NULL,
+  patient_id    VARCHAR(32)  NOT NULL,
+  recorded_at   DATETIME     NOT NULL,
+  recorded_by   VARCHAR(120) DEFAULT NULL,
+  temp_c        DECIMAL(4,1) DEFAULT NULL,
+  pulse_bpm     INT          DEFAULT NULL,
+  bp_systolic   INT          DEFAULT NULL,
+  bp_diastolic  INT          DEFAULT NULL,
+  resp_rate     INT          DEFAULT NULL,
+  spo2          INT          DEFAULT NULL,
+  weight_kg     DECIMAL(6,2) DEFAULT NULL,
+  glucose_mmol  DECIMAL(5,2) DEFAULT NULL,
+  notes         TEXT         DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY ix_health_vitals_patient (patient_id, recorded_at),
+  KEY ix_health_vitals_account (account_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS health_care_plans (
+  id            VARCHAR(32)  NOT NULL,
+  account_id    VARCHAR(32)  NOT NULL,
+  patient_id    VARCHAR(32)  NOT NULL,
+  title         VARCHAR(160) NOT NULL,
+  diagnosis     VARCHAR(255) DEFAULT NULL,
+  goals         TEXT         DEFAULT NULL,
+  interventions TEXT         DEFAULT NULL,
+  status        VARCHAR(20)  NOT NULL DEFAULT 'active',
+  start_date    DATE         DEFAULT NULL,
+  review_date   DATE         DEFAULT NULL,
+  created_by    VARCHAR(120) DEFAULT NULL,
+  created_at    DATETIME     DEFAULT NULL,
+  updated_at    DATETIME     DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY ix_health_plan_patient (patient_id),
+  KEY ix_health_plan_account (account_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS health_messages (
+  id            VARCHAR(32)  NOT NULL,
+  account_id    VARCHAR(32)  NOT NULL,
+  patient_id    VARCHAR(32)  NOT NULL,
+  direction     VARCHAR(12)  NOT NULL DEFAULT 'outbound', -- inbound|outbound|internal
+  sender        VARCHAR(120) DEFAULT NULL,
+  body          TEXT         NOT NULL,
+  channel       VARCHAR(20)  DEFAULT 'secure',
+  sent_at       DATETIME     NOT NULL,
+  read_at       DATETIME     DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY ix_health_msg_patient (patient_id, sent_at),
+  KEY ix_health_msg_account (account_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 SET FOREIGN_KEY_CHECKS = 1;

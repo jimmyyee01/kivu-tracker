@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0b1220">
+<link rel="icon" type="image/png" href="/icons/icon-192.png">
 <title>Administration — KIVU Tracker</title>
 <link rel="stylesheet" href="/css/style.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -44,7 +47,7 @@
       </div>
       <div class="grid3">
         <div style="grid-column:span 1" id="geofencesTable"></div>
-        <div class="card" style="grid-column:span 2;position:relative;overflow:hidden;min-height:460px">
+        <div class="card" style="grid-column:span 2;position:relative;overflow:hidden;isolation:isolate;min-height:460px">
           <div id="fenceMap" style="position:absolute;inset:0"></div>
         </div>
       </div>

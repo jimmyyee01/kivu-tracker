@@ -60,6 +60,7 @@ function notification_default_text(string $type): string {
         'fuel_fill' => 'Fuel refill of {change} L detected at {address}',
         'power_cut' => 'External power cut, voltage {voltage} V at {address}',
         'offline' => 'No data for {age} (last seen {last_time})',
+        'harsh' => '{mode}: {rate} km/h/s at {address} ({speed} km/h)',
         'movement' => 'Movement started at {address}',
         'idle' => 'Idle for {duration} with engine running at {address}',
         'maintenance' => 'Maintenance due: {item} ({remaining})',
@@ -101,12 +102,28 @@ function fire_notification(array $n, array $unit, array $ctx): int {
             $r = fire_webhook((string)$n['webhook_url'], $payload);
             audit('notification_webhook', 'notification', $n['id'],
                 ['url' => $n['webhook_url'], 'ok' => $r['ok'], 'status' => $r['status'] ?? null]);
-        } elseif ($a === 'email' && !empty($n['email_to'])) {
-            audit('notification_email_queued', 'notification', $n['id'], ['to' => $n['email_to'], 'subject' => $text]);
+        } elseif ($a === 'email') {
+            foreach (alert_email_recipients($n, $unit) as $mail) {
+                $subject = '[' . (string)setting('platform_name', APP_NAME) . '] ' . $text;
+                $r = mail_send($mail, $subject, alert_email_html($text, $type, $severity, $unit, $vars, $eventId));
+                audit('notification_email_sent', 'notification', $n['id'],
+                    ['to' => $mail, 'ok' => $r['ok'], 'error' => $r['error'] ?? null]);
+            }
         } elseif ($a === 'sms' && !empty($n['phone_to'])) {
             audit('notification_sms_queued', 'notification', $n['id'], ['to' => $n['phone_to'], 'text' => $text]);
         }
     }
+    /* mobile push channel: instant Telegram (works while the app is closed) */
+    $tlat = is_numeric($vars['lat'] ?? null) ? (float)$vars['lat'] : null;
+    $tlon = is_numeric($vars['lon'] ?? null) ? (float)$vars['lon'] : null;
+    $tloc = ($tlat !== null && $tlon !== null) ? "\n" . sprintf('https://maps.google.com/?q=%s,%s', $tlat, $tlon) : '';
+    $tok = telegram_send('KIVU ' . strtoupper((string)$type) . ' - ' . (string)$unit['name'] . "\n" . (string)$text . $tloc
+        . "\nAcknowledge in the app to stop the repeat alerts.");
+    audit('notification_telegram', 'notification', $n['id'], ['ok' => $tok]);
+    /* native web push: OS banner at the top of the screen, tap opens the app */
+    $pok = push_send_all('KIVU ' . strtoupper((string)$type) . ' - ' . (string)$unit['name'],
+        (string)$text . $tloc, '/app', 'kivu-e' . (int)$eventId, (string)($unit['account_id'] ?? ''));
+    audit('notification_push', 'notification', $n['id'], ['ok' => $pok > 0, 'sent' => $pok]);
     return $eventId;
 }
 
@@ -233,6 +250,25 @@ function notification_rules(array $unit, array $m, ?array $prev, array $geoEvent
                     $ctx = ['type' => 'movement'];
                 }
                 break;
+            case 'harsh':
+                if (!$prev) break;
+                $dt = (int)strtotime((string)$m['ts']) - (int)strtotime((string)$prev['ts']);
+                if ($dt < 2 || $dt > 120) break;                 // sane window between fixes
+                $rate = ((float)$m['speed'] - (float)$prev['speed']) / $dt;   // km/h per second
+                $thr = (float)($p['threshold'] ?? 10);           // default 10 km/h/s (~2.8 m/s2)
+                if (abs($rate) < $thr) break;
+                $cool = (int)($p['cooldown_s'] ?? 60);
+                $stc = db()->prepare("SELECT COUNT(*) FROM events WHERE unit_id = ? AND type = 'harsh' AND ts >= ?");
+                $stc->execute([$unit['id'], date('Y-m-d H:i:s', time() - $cool)]);
+                if ((int)$stc->fetchColumn() > 0) break;         // cooldown: one per minute
+                $ctx = ['type' => 'harsh', 'severity' => 'warning',
+                    'vars' => ['mode' => $rate < 0 ? 'Harsh braking' : 'Rapid acceleration',
+                               'rate' => round(abs($rate), 1)],
+                    'extra' => ['mode' => $rate < 0 ? 'braking' : 'acceleration',
+                                'rate' => round(abs($rate), 1),
+                                'from_speed' => (float)$prev['speed'], 'to_speed' => (float)$m['speed'],
+                                'window_s' => $dt]];
+                break;
             default:
                 continue 2;   // geofence / idle / offline / maintenance are handled elsewhere
         }
@@ -258,7 +294,10 @@ function check_offline_notifications(?string $accountId = null): int {
     $fired = 0;
     foreach (notifications_of_type('offline', $accountId) as $n) {
         $p = jdec($n['params_json'] ?? null, []);
-        $timeout = (int)($p['timeout_s'] ?? 900);
+        /* Super admin's platform interval (Settings) wins when set; 0 falls back
+           to each rule's own timeout_s (default 15 min). Default: 10 minutes. */
+        $globalMin = (int)setting('offline_alert_min', 10);
+        $timeout = $globalMin > 0 ? $globalMin * 60 : max(60, (int)($p['timeout_s'] ?? 900));
         foreach (units_list(['account_id' => $n['account_id']], null) as $u) {
             if (!notif_matches_unit($n, (string)$u['id'])) continue;
             if (empty($u['last_time'])) continue;
@@ -351,4 +390,135 @@ function mark_offline_units(?string $accountId = null): int {
     $st = db()->prepare($sql);
     $st->execute($p);
     return $st->rowCount();
+}
+
+/* Recipients: the rule's email_to plus every enabled admin of the unit's
+   own account — alerts never cross account boundaries. */
+function alert_email_recipients(array $n, array $unit): array {
+    $list = [];
+    foreach (explode(',', (string)($n['email_to'] ?? '')) as $e) {
+        $e = trim($e);
+        if ($e !== '' && strpos($e, '@') !== false) $list[] = $e;
+    }
+    $st = db()->prepare("SELECT email FROM users WHERE account_id = ? AND role = 'admin' AND enabled = 1 AND email IS NOT NULL AND email <> ''");
+    $st->execute([(string)$unit['account_id']]);
+    foreach ($st->fetchAll() as $r) $list[] = trim((string)$r['email']);
+    /* super admins receive every account's alerts in one inbox */
+    $st = db()->prepare("SELECT email FROM users WHERE role = 'super' AND enabled = 1 AND email IS NOT NULL AND email <> ''");
+    $st->execute();
+    foreach ($st->fetchAll() as $r) $list[] = trim((string)$r['email']);
+    return array_values(array_unique($list));
+}
+function alert_email_html(string $text, string $type, string $severity, array $unit, array $vars, int $eventId): string {
+    $esc = fn($s) => htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
+    $color = ['info' => '#2f9cf4', 'warning' => '#f1c40f', 'critical' => '#e74c3c'][$severity] ?? '#f1c40f';
+    $driver = trim((string)($unit['driver_name'] ?? ''));
+    $coord = trim((string)($vars['lat'] ?? '')) !== ''
+        ? (string)$vars['lat'] . ', ' . (string)($vars['lon'] ?? '') : '';
+    $rows = [
+        ['Device', (string)$unit['name']],
+        ['Driver', $driver !== '' ? $driver : '-'],
+        ['Alert', $text],
+        ['Type', $type],
+        ['When', date('Y-m-d H:i:s') . ' (server time)'],
+        ['Location', trim((string)($vars['address'] ?? '')) !== '' ? (string)$vars['address'] : '-'],
+        ['Coordinates', $coord],
+        ['Severity', $severity],
+    ];
+    $body = '';
+    foreach ($rows as $row) {
+        $body .= '<tr><td style="padding:6px 12px;color:#6b7280;white-space:nowrap"><b>' . $esc($row[0]) . '</b></td>'
+            . '<td style="padding:6px 12px">' . $esc($row[1]) . '</td></tr>';
+    }
+    $name = (string)setting('platform_name', APP_NAME);
+    return '<div style="font-family:Arial,Helvetica,sans-serif;background:#f4f6fa;padding:18px">'
+        . '<div style="max-width:580px;margin:0 auto;background:#fff;border:1px solid #e3e8f0;border-radius:10px;overflow:hidden">'
+        . '<div style="background:' . $color . ';color:#fff;padding:12px 16px;font-weight:700">' . $esc($name) . ' alert</div>'
+        . '<table style="border-collapse:collapse;width:100%;font-size:13px;color:#1f2937">' . $body . '</table>'
+        . '<div style="padding:10px 16px;color:#6b7280;font-size:11.5px;border-top:1px solid #eef1f6">'
+        . 'Event #' . $eventId . ' &mdash; sent by ' . $esc($name) . '</div></div></div>';
+}
+
+/* ------------------------------------------------- telegram (mobile push) --- */
+/* Config lives inside settings.billing_json -> {"telegram": {...}} next to mail. */
+function telegram_config(): array {
+    $cfg = jdec(setting('billing_json', null), []);
+    $t = is_array($cfg['telegram'] ?? null) ? $cfg['telegram'] : [];
+    return [
+        'token' => trim((string)($t['token'] ?? '')),
+        'chat_id' => trim((string)($t['chat_id'] ?? '')),
+        'enabled' => !empty($t['enabled']),
+    ];
+}
+/* Real outbound Telegram message via their HTTPS bot API (no public ports needed). */
+function telegram_send(string $text): bool {
+    $t = telegram_config();
+    if (!$t['enabled'] || $t['token'] === '' || $t['chat_id'] === '') return false;
+    $ch = curl_init('https://api.telegram.org/bot' . $t['token'] . '/sendMessage');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => jenc(['chat_id' => $t['chat_id'], 'text' => $text,
+            'disable_web_page_preview' => true]),
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 8,
+    ]);
+    $body = (string)curl_exec($ch);
+    curl_close($ch);
+    return str_contains($body, '"ok":true');
+}
+
+/* --------------------------------------------------- web push (PWA install) --- */
+/* VAPID keypair lives in billing_json.vapid {pub, priv} next to telegram/mail. */
+function push_vapid(): array {
+    $cfg = jdec(setting('billing_json', null), []);
+    $v = is_array($cfg['vapid'] ?? null) ? $cfg['vapid'] : [];
+    return ['pub' => trim((string)($v['pub'] ?? '')), 'priv' => trim((string)($v['priv'] ?? ''))];
+}
+function h_push_vapid(?array $user, array $params): array {
+    $v = push_vapid();
+    return ['publicKey' => $v['pub'], 'enabled' => $v['pub'] !== ''];
+}
+function h_push_subscribe(?array $user, array $params): array {
+    need($user !== null, 'Authentication required', 401);
+    $b = jdec((string)file_get_contents('php://input'), []);
+    $endpoint = trim((string)($b['endpoint'] ?? ''));
+    $p256 = trim((string)($b['keys']['p256dh'] ?? ''));
+    $auth = trim((string)($b['keys']['auth'] ?? ''));
+    need($endpoint !== '' && $p256 !== '' && $auth !== '', 'Invalid subscription', 400);
+    db()->prepare('REPLACE INTO push_subs (user_id, endpoint, endpoint_hash, p256dh, auth, created_at) VALUES (?,?,?,?,?,?)')
+        ->execute([(int)$user['id'], $endpoint, hash('sha256', $endpoint), $p256, $auth, now_dt()]);
+    return ['subscribed' => true];
+}
+function h_push_unsubscribe(?array $user, array $params): array {
+    $b = jdec((string)file_get_contents('php://input'), []);
+    $endpoint = trim((string)($b['endpoint'] ?? ''));
+    if ($endpoint !== '') {
+        db()->prepare('DELETE FROM push_subs WHERE endpoint_hash = ?')->execute([hash('sha256', $endpoint)]);
+    }
+    return ['subscribed' => false];
+}
+/* One OS notification to every subscribed device of this account (+super admins). */
+function push_send_all(string $title, string $body, string $url, string $tag = 'kivu-alert', string $accountId = ''): int {
+    $v = push_vapid();
+    $script = __DIR__ . '/../tools/push_send.py';
+    if ($v['pub'] === '' || $v['priv'] === '' || !is_file($script)) return 0;
+    $st = db()->prepare('SELECT p.endpoint, p.p256dh, p.auth FROM push_subs p
+        JOIN users u ON u.id = p.user_id
+        WHERE u.enabled = 1 AND (u.role = ? OR u.account_id = ?)');
+    $st->execute(['super', $accountId]);
+    $payload = jenc(['title' => $title, 'body' => $body, 'url' => $url, 'tag' => $tag]);
+    $sent = 0;
+    foreach ($st->fetchAll() as $row) {
+        $blob = base64_encode(jenc([
+            'priv' => $v['priv'], 'endpoint' => $row['endpoint'],
+            'p256dh' => $row['p256dh'], 'auth' => $row['auth'], 'payload' => $payload,
+        ]));
+        $out = trim((string)shell_exec('python3 ' . escapeshellarg($script) . ' ' . escapeshellarg($blob) . ' 2>/dev/null'));
+        if ($out === 'sent') $sent++;
+        elseif (str_contains($out, '410') || str_contains($out, '404')) {
+            db()->prepare('DELETE FROM push_subs WHERE endpoint_hash = ?')->execute([hash('sha256', $row['endpoint'])]);
+        }
+    }
+    return $sent;
 }

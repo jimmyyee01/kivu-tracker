@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kivu Systems — Business Modules</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div id="topbar"></div>
+<main class="container pad" style="max-width:1100px;margin:0 auto">
+  <h1 style="margin:12px 0 4px">Kivu Systems Modules</h1>
+  <p class="hint">Select a business vertical. Each module applies its own branding, navigation, and feature set.</p>
+  <div id="modulesGrid" class="m-grid" style="margin-top:14px"></div>
+</main>
+<script src="/js/common.js"></script>
+<script>
+(async function(){
+  try { await boot('modules'); } catch(e){}
+  try {
+    const d = await API.get('/api/modules', { silent:true });
+    const list = (d && d.modules) ? d.modules : [];
+    const host = document.getElementById('modulesGrid');
+    host.innerHTML = '';
+    list.forEach(m => {
+      const card = document.createElement('a');
+      card.className = 'm-card';
+      card.href = (m.console_path || '/' + m.slug);
+      card.style.textDecoration='none'; card.style.display='block';
+      card.innerHTML = (m.logo ? '<img src="'+h(m.logo)+'" alt="" style="height:34px;max-width:140px;object-fit:contain;display:block;margin-bottom:8px">' : '')
+        + '<h3 style="margin:0 0 4px">'+h(m.name)+'</h3><p>'+h(m.tagline||'')+'</p>'
+        + '<p class="hint" style="margin-top:8px">/'+h(m.slug)+'</p>';
+      host.appendChild(card);
+    });
+    if (!list.length) host.innerHTML = '<p class="muted">No modules configured.</p>';
+  } catch(e){ document.getElementById('modulesGrid').innerHTML = '<p class="muted">Modules unavailable.</p>'; }
+})();
+</script>
+</body>
+</html>

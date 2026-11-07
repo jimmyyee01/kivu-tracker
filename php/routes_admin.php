@@ -289,7 +289,7 @@ function h_logo_delete($user, $p): array {
 }
 function h_settings_save($user, $p): array {
     $allowed = ['platform_name', 'company_name', 'support_email', 'default_currency', 'map_tiles',
-        'default_lat', 'default_lon', 'default_zoom', 'online_timeout_s', 'moving_speed_kmh',
+        'default_lat', 'default_lon', 'default_zoom', 'online_timeout_s', 'moving_speed_kmh', 'offline_alert_min',
         'retention_days', 'ips_port', 'theme_mode', 'portal_price',
         'apk_url', 'apk_version', 'apk_notes', 'logo_url', 'powered_by'];
     $fields = [];
@@ -297,6 +297,7 @@ function h_settings_save($user, $p): array {
         $v = bval($k, null);
         if ($v === null) continue;
         if (in_array($k, ['default_lat', 'default_lon', 'moving_speed_kmh'], true)) $fields[$k] = (float)$v;
+        elseif ($k === 'offline_alert_min') $fields[$k] = max(0, min(1440, (int)$v));
         elseif (in_array($k, ['default_zoom', 'online_timeout_s', 'retention_days', 'ips_port'], true)) $fields[$k] = (int)$v;
         elseif ($k === 'portal_price') $fields[$k] = max(0, (float)$v);
         else $fields[$k] = trim((string)$v);

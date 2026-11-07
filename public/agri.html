@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kivu AgriSmart — Farm Management</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div id="topbar"></div>
+<main class="container pad" id="agriApp" style="max-width:1200px;margin:0 auto">
+  <div class="row wrap" style="align-items:flex-end;gap:12px;margin:12px 0">
+    <div><h1 style="margin:0">AgriSmart</h1><p class="hint" id="agriHint">Crop cycles, livestock, inventory and yield analytics for the selected account.</p></div>
+    <span class="spacer" style="flex:1"></span>
+    <button class="btn sm" id="agriRefresh">Refresh</button>
+  </div>
+  <div class="stats" id="agriSummary"></div>
+  <div class="tabs" id="agriTabs" style="margin-top:14px">
+    <div class="tab active" data-pane="agriFarms">Farms</div>
+    <div class="tab" data-pane="agriFields">Fields</div>
+    <div class="tab" data-pane="agriCycles">Crop cycles</div>
+    <div class="tab" data-pane="agriLivestock">Livestock</div>
+    <div class="tab" data-pane="agriInventory">Inventory</div>
+    <div class="tab" data-pane="agriYields">Yields</div>
+  </div>
+  <div class="tabbody">
+    <div class="tabpane active" id="agriFarms"><div class="row wrap" style="margin:10px 0"><button class="btn primary sm" id="agriNewFarm">+ Farm</button></div><div id="agriFarmsTable"></div></div>
+    <div class="tabpane" id="agriFields"><div class="row wrap" style="margin:10px 0"><button class="btn primary sm" id="agriNewField">+ Field</button></div><div id="agriFieldsTable"></div></div>
+    <div class="tabpane" id="agriCycles"><div class="row wrap" style="margin:10px 0"><button class="btn primary sm" id="agriNewCycle">+ Crop cycle</button></div><div id="agriCyclesTable"></div></div>
+    <div class="tabpane" id="agriLivestock"><div class="row wrap" style="margin:10px 0"><button class="btn primary sm" id="agriNewAnimal">+ Livestock</button></div><div id="agriLivestockTable"></div></div>
+    <div class="tabpane" id="agriInventory"><div class="row wrap" style="margin:10px 0"><button class="btn primary sm" id="agriNewInv">+ Inventory item</button></div><div id="agriInventoryTable"></div></div>
+    <div class="tabpane" id="agriYields"><div class="row wrap" style="margin:10px 0"><button class="btn primary sm" id="agriNewYield">+ Yield record</button></div><div id="agriYieldsTable"></div></div>
+  </div>
+</main>
+<script src="/js/common.js"></script>
+<script src="/js/agri.js"></script>
+</body>
+</html>

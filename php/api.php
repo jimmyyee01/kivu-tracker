@@ -18,6 +18,7 @@ require_once __DIR__ . '/trips.php';
 require_once __DIR__ . '/ips.php';
 require_once __DIR__ . '/reports.php';
 require_once __DIR__ . '/payments.php';
+require_once __DIR__ . '/modules.php';
 require_once __DIR__ . '/routes_auth.php';
 require_once __DIR__ . '/routes_units.php';
 require_once __DIR__ . '/routes_geo.php';
@@ -26,6 +27,10 @@ require_once __DIR__ . '/routes_admin.php';
 require_once __DIR__ . '/routes_billing.php';
 require_once __DIR__ . '/routes_portals.php';
 require_once __DIR__ . '/routes_finance.php';
+require_once __DIR__ . '/routes_cms.php';       // public website content (super admin)
+require_once __DIR__ . '/routes_modules.php';   // business modules / multi-tenant SaaS
+if (is_file(__DIR__ . '/routes_agri.php')) require_once __DIR__ . '/routes_agri.php';
+if (is_file(__DIR__ . '/routes_health.php')) require_once __DIR__ . '/routes_health.php';
 
 /* JSON endpoints must never print PHP notices into the body — a stray warning
    corrupts the envelope and the browser reports a broken/aborted response.
@@ -56,7 +61,9 @@ function api_path(): string {
 function api_routes(): array {
     return array_merge(
         routes_auth(), routes_units(), routes_geo(), routes_reports(), routes_admin(), routes_billing(),
-        routes_portals(), routes_finance(),
+        routes_portals(), routes_finance(), routes_cms(), routes_modules(),
+        (function_exists('routes_agri') ? routes_agri() : []),
+        (function_exists('routes_health') ? routes_health() : []),
         [
             ['GET', '#^/health$#', 'h_health', 'public'],
             ['GET', '#^/app$#', 'h_app_info', 'public'],
@@ -65,6 +72,9 @@ function api_routes(): array {
             ['POST', '#^/tasks/run$#', 'h_tasks_run', 'read'],
             ['POST', '#^/ingest$#', 'h_ingest_http', 'public'],
             ['GET', '#^/audit$#', 'h_audit', 'admin'],
+            ['GET', '#^/push/vapid$#', 'h_push_vapid', 'read'],
+            ['POST', '#^/push/subscribe$#', 'h_push_subscribe', 'read'],
+            ['POST', '#^/push/unsubscribe$#', 'h_push_unsubscribe', 'read'],
         ]
     );
 }
@@ -228,12 +238,16 @@ function h_meta($user, $p): array {
             'zoom' => (int)setting('default_zoom', 11)],
         'settings' => ['online_timeout_s' => (int)setting('online_timeout_s', 300),
             'moving_speed_kmh' => (float)setting('moving_speed_kmh', 5),
+            'offline_alert_min' => (int)setting('offline_alert_min', 10),
             'currency' => setting('default_currency', 'USD'),
             'retention_days' => (int)setting('retention_days', 90),
             'ips_port' => (int)setting('ips_port', 20332),
             'theme_mode' => setting('theme_mode', 'user')],
         'report_types' => report_types(),
         'asset_types' => asset_types(),
+        /* website content of the caller's account: the typed help/terms/landing
+           links the console can show (see php/routes_cms.php) */
+        'cms' => cms_account_links((string)($user['account_id'] ?? '')),
         'device_catalogue' => device_catalogue(),
         'app' => ['page' => '/download', 'version' => app_download_info()['version'],
             'available' => app_download_info()['available']],
@@ -241,6 +255,7 @@ function h_meta($user, $p): array {
             'power_cut', 'offline', 'movement', 'maintenance'],
         'user' => user_public($user),
         'server_time' => date('c')];
+    $shared = array_merge($shared, module_meta_payload($user));
     /* A reseller owns a portal, not an account: they get the platform basics
        (so /reseller boots) and never any client fleet data. */
     if (!is_super($user) && (string)($user['role'] ?? '') === 'reseller') {
@@ -398,7 +413,7 @@ function h_ingest_http($user, $p): array {
     $points = $b['points'] ?? null;
     if (!is_array($points) || !$points) {
         $points = [array_intersect_key($b, array_flip(['ts', 'lat', 'lon', 'speed', 'course', 'alt', 'sats',
-            'params', 'valid', 'ignition', 'fuel', 'voltage']))];
+            'params', 'valid', 'ignition', 'fuel', 'voltage', 'battery', 'weight', 'accuracy']))];
     }
     $stored = 0; $events = 0; $geofence = 0; $results = [];
     foreach ($points as $point) {

@@ -12,6 +12,10 @@
 'use strict';
 
 const MapCore = (function () {
+  /* Used when no tile URL is supplied, and as the fallback for an empty one,
+     so a map never ends up requesting the page itself as a tile. */
+  const DEFAULT_TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+
   function create(container, opts) {
     opts = opts || {};
     const hasLeaflet = (typeof L !== 'undefined' && L.map);
@@ -26,9 +30,12 @@ const MapCore = (function () {
   function leafletImpl(container, opts) {
     const map = L.map(container, { zoomControl: true, attributionControl: false })
       .setView([opts.lat || -1.2921, opts.lon || 36.8219], opts.zoom || 11);
+    /* keep Leaflet's zoom buttons out of the app toolbar's corner (top-left) */
+    if (map.zoomControl) map.zoomControl.setPosition('topright');
     let tileLayer = null;
     if (opts.tiles !== false) {
-      tileLayer = L.tileLayer(opts.tiles || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+      tileLayer = L.tileLayer(opts.tiles || DEFAULT_TILES,
+        { maxZoom: opts.maxZoom || 19, subdomains: opts.subdomains || 'abc' }).addTo(map);
     }
     const unitsLayer = L.layerGroup().addTo(map);
     const fenceLayer = L.layerGroup().addTo(map);
@@ -56,20 +63,75 @@ const MapCore = (function () {
       return '<div class="mk-pop"><b>' + h(u.name || '') + '</b><table>'
         + '<tr><td>Status</td><td>' + h((STATUS[u.status] || STATUS.never).label) + '</td></tr>'
         + '<tr><td>Speed</td><td>' + fmt.speed(u.speed) + '</td></tr>'
+        + (u.battery === null || u.battery === undefined ? '' : '<tr><td>Battery</td><td>' + Math.round(u.battery) + '%</td></tr>')
         + '<tr><td>Updated</td><td>' + h(fmt.dt(u.last_time)) + '</td></tr>'
         + '<tr><td>Location</td><td>' + h(u.address || '') + '</td></tr></table></div>';
     }
+    /* ---- smooth movement: markers DRIVE to the next fix instead of jumping ----
+       Between polls the marker glides from the old point to the new one over the
+       real elapsed time (clamped 1-20 s), so a 30 s fix interval looks like a
+       car actually moving. Jitter (<20 m), teleports (>15 km), parked/offline
+       units and reduced-motion users still get an instant snap. */
+    const smoothState = {};
+    const SMOOTH_MIN_KM = 0.02;
+    const SMOOTH_MAX_KM = 15;
+    function llDistKm(aLat, aLon, bLat, bLon) {
+      const R = 6371, rad = Math.PI / 180;
+      const dLat = (bLat - aLat) * rad, dLon = (bLon - aLon) * rad;
+      const s = Math.sin(dLat / 2) ** 2
+        + Math.cos(aLat * rad) * Math.cos(bLat * rad) * Math.sin(dLon / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(s));
+    }
+    function smoothMove(marker, id, target, newIcon, newPopup, moving) {
+      const st = smoothState[id] || (smoothState[id] = {});
+      if (st.raf) { cancelAnimationFrame(st.raf); st.raf = null; }
+      const from = marker.getLatLng();
+      const distKm = llDistKm(from.lat, from.lng, target[0], target[1]);
+      const now = Date.now();
+      const gapS = st.lastFixAt ? Math.min(30, (now - st.lastFixAt) / 1000) : 99;
+      st.lastFixAt = now;
+      const reduced = !!(window.matchMedia
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+      if (!moving || reduced || distKm < SMOOTH_MIN_KM || distKm > SMOOTH_MAX_KM
+          || gapS < 1 || gapS > 28) {
+        marker.setLatLng(target);                     /* snap: not a drive */
+      } else {
+        const durMs = Math.min(20000, Math.max(1000, gapS * 1000));
+        const t0 = performance.now();
+        const step = (t) => {
+          const k = Math.min(1, (t - t0) / durMs);
+          marker.setLatLng([from.lat + (target[0] - from.lat) * k,
+                            from.lng + (target[1] - from.lng) * k]);
+          st.raf = k < 1 ? requestAnimationFrame(step) : null;
+        };
+        st.raf = requestAnimationFrame(step);
+      }
+      marker.setIcon(newIcon);                        /* colour + heading stay live */
+      marker.setPopupContent(newPopup);
+    }
     return {
       raw: function () { return map; },
-      setTiles: function (url) {
+      setTiles: function (url, o) {
+        o = o || {};
+        const src = url || DEFAULT_TILES;   /* never request the page as a tile */
         if (tileLayer) map.removeLayer(tileLayer);
-        tileLayer = L.tileLayer(url, { maxZoom: 19 }).addTo(map);
+        tileLayer = L.tileLayer(src, {
+          maxZoom: o.maxZoom || 19,
+          subdomains: o.subdomains || 'abc'
+        }).addTo(map);
       },
       setView: function (lat, lon, zoom) { map.setView([lat, lon], zoom || map.getZoom()); },
       getView: function () { const c = map.getCenter(); return { lat: c.lat, lon: c.lng, zoom: map.getZoom() }; },
       fitPoints: function (points) {
         if (!points || !points.length) return;
-        map.fitBounds(L.latLngBounds(points.map(p => [p.lat, p.lon])).pad(0.15));
+        if (points.length === 1) { map.setView([points[0].lat, points[0].lon], 14); return; }
+        map.fitBounds(L.latLngBounds(points.map(p => [p.lat, p.lon])).pad(0.15), { maxZoom: 16 });
+      },
+      /* is every point inside the current view? (auto-fit uses this) */
+      containsAll: function (points, padRatio) {
+        if (!points || !points.length) return true;
+        const b = map.getBounds().pad(-(padRatio === undefined ? 0.06 : padRatio));
+        return points.every(p => b.contains([p.lat, p.lon]));
       },
       on: function (evt, fn) { if (evt === 'click') clickHandlers.push(fn); },
       clearUnits: function () { unitsLayer.clearLayers(); Object.keys(markers).forEach(k => delete markers[k]); },
@@ -84,9 +146,8 @@ const MapCore = (function () {
           if (u.lat === null || u.lat === undefined) return;
           const existing = markers[u.id];
           if (existing) {
-            existing.setLatLng([u.lat, u.lon]);
-            existing.setIcon(markerIcon(u));
-            existing.setPopupContent(popupHtml(u));
+            smoothMove(existing, String(u.id), [u.lat, u.lon],
+              markerIcon(u), popupHtml(u), u.status === 'moving');
           } else {
             const m = L.marker([u.lat, u.lon], { icon: markerIcon(u) }).addTo(unitsLayer);
             m.bindPopup(popupHtml(u));
@@ -170,7 +231,7 @@ const MapCore = (function () {
 
     let center = { lat: opts.lat || -1.2921, lon: opts.lon || 36.8219 };
     let zoom = Math.round(opts.zoom || 11);
-    let tileUrl = opts.tiles || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+    let tileUrl = opts.tiles || DEFAULT_TILES;
     const clickHandlers = [];
     const markerEls = {};
     const spot = { units: [], onClick: null, track: [], trackStyle: {}, player: null, fences: [], preview: null };
@@ -206,6 +267,20 @@ const MapCore = (function () {
     function metersPerPixel(lat) {
       return 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, zoom);
     }
+    /* {s} subdomain and {r} retina tokens — Leaflet substitutes them natively,
+       so this backend must too or every provider that uses them (Wikimedia,
+       OSM France/Germany…) would render blank tiles. The subdomain is picked
+       from x+y so a tile keeps the same host on every redraw (better caching). */
+    const SUBDOMAINS = ['a', 'b', 'c'];
+    function tileSrc(x, y, z) {
+      const s = SUBDOMAINS[(((x + y) % SUBDOMAINS.length) + SUBDOMAINS.length) % SUBDOMAINS.length];
+      return tileUrl
+        .replace('{s}', s)
+        .replace('{z}', z)
+        .replace('{x}', x)
+        .replace('{y}', y)
+        .replace('{r}', '');
+    }
     function renderTiles() {
       const s = size(), o = origin(), ts = 256;
       tileLayer.innerHTML = '';
@@ -216,7 +291,7 @@ const MapCore = (function () {
         for (let y = y0; y <= y1; y++) {
           const wrapX = ((x % max) + max) % max;
           tileLayer.appendChild(el('img', {
-            src: tileUrl.replace('{z}', zoom).replace('{x}', wrapX).replace('{y}', y),
+            src: tileSrc(wrapX, y, zoom),
             style: 'position:absolute;width:256px;height:256px;left:' + (x * ts - o.x) + 'px;top:'
               + (y * ts - o.y) + 'px;user-select:none;-webkit-user-drag:none'
           }));
@@ -403,6 +478,16 @@ const MapCore = (function () {
           if (Math.abs(b.x - a.x) < s.w * 0.85 && Math.abs(b.y - a.y) < s.h * 0.85) break;
         }
         render();
+      },
+      /* is every point inside the current view? (auto-fit uses this) */
+      containsAll: function (points, padRatio) {
+        if (!points || !points.length) return true;
+        const s = size(), m = (padRatio === undefined ? 0.06 : padRatio);
+        const mx = s.w * m, my = s.h * m;
+        return points.every(p => {
+          const q = toScreen(p.lat, p.lon);
+          return q.x >= mx && q.x <= s.w - mx && q.y >= my && q.y <= s.h - my;
+        });
       },
       on: function (evt, fn) { if (evt === 'click') clickHandlers.push(fn); },
       clearUnits: function () { spot.units = []; renderMarkers(); },

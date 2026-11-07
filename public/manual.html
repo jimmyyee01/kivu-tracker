@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0b1220">
+<link rel="icon" type="image/png" href="/icons/icon-192.png">
+<title>User manual — KIVU Tracker</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="auth-body">
+<div id="topbar"></div>
+
+<div class="landing">
+  <div class="row wrap" style="align-items:center;gap:10px">
+    <h1 style="margin:0">User manual</h1>
+    <span class="chip info">KIVU Tracker</span>
+    <span class="spacer" style="flex:1"></span>
+    <a class="btn ghost" href="/app">Back to the console</a>
+  </div>
+  <p class="muted" style="max-width:820px">
+    Everything you need to run the platform: devices, the live map, alerts, reports,
+    the phone app and administration. Each section is short — use the contents list
+    to jump around.
+  </p>
+
+  <div class="card pad" style="margin-top:14px">
+    <h3>Contents</h3>
+    <div class="grid cols-2 hint" style="padding-left:2px">
+      <div>
+        <ol style="padding-left:20px">
+          <li><a href="#intro">What KIVU Tracker does</a></li>
+          <li><a href="#signin">Signing in and accounts</a></li>
+          <li><a href="#monitoring">The monitoring console</a></li>
+          <li><a href="#states">Vehicle status explained</a></li>
+          <li><a href="#alerts">Alerts and the notification bell</a></li>
+          <li><a href="#rules">Alert rules (e-mail, Telegram, push)</a></li>
+        </ol>
+      </div>
+      <div>
+        <ol start="7" style="padding-left:20px">
+          <li><a href="#devices">Adding a GPS device or the phone app</a></li>
+          <li><a href="#reports">Reports and exports</a></li>
+          <li><a href="#admin">Administration</a></li>
+          <li><a href="#plans">Plans, billing and the super console</a></li>
+          <li><a href="#mobile">Mobile: install, push, badge</a></li>
+          <li><a href="#faq">Troubleshooting FAQ</a></li>
+        </ol>
+      </div>
+    </div>
+  </div>
+  <div class="grid cols-2" style="margin-top:16px">
+    <div class="card pad" id="intro">
+      <h3>1 · What KIVU Tracker does</h3>
+      <p class="hint">
+        GPS trackers (vehicle units, the phone app, the built-in protocol gateways)
+        send their position to this server over the air. The server decodes them,
+        stores history, shows live state on the map, evaluates your alert rules and
+        pushes notifications — while reports turn the history into trips, mileage and
+        summaries you can print or export.
+      </p>
+      <ul class="hint" style="padding-left:20px">
+        <li>Live map with fleet status chips, geofences and the unit trail.</li>
+        <li>Speeding, harsh driving, geofence and no-data (offline) alerts.</li>
+        <li>Notifications by in-page bell, e-mail, Telegram and phone push.</li>
+        <li>Multi-account platform: each customer sees only their own fleet.</li>
+      </ul>
+    </div>
+
+    <div class="card pad" id="signin">
+      <h3>2 · Signing in and accounts</h3>
+      <ol class="hint" style="padding-left:20px">
+        <li>Open the server address (or install the app) and press <b>Sign in</b>.</li>
+        <li>Enter the username and password your administrator gave you.</li>
+        <li>You stay signed in until <b>you</b> press <b>Sign out</b> — sessions renew
+            themselves while you use the console.</li>
+      </ol>
+      <p class="hint"><b>Roles:</b></p>
+      <ul class="hint" style="padding-left:20px">
+        <li><b>super</b> — platform owner: every account, plans, platform settings.</li>
+        <li><b>admin</b> — account owner: users, units, rules, billing for that account.</li>
+        <li><b>operator</b> — daily work: monitoring, reports, geofences, alerts.</li>
+        <li><b>viewer</b> — read-only: can watch and export, cannot change anything.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="grid cols-2" style="margin-top:16px">
+    <div class="card pad" id="monitoring">
+      <h3>3 · The monitoring console</h3>
+      <ol class="hint" style="padding-left:20px">
+        <li><b>Units panel</b> (left): search by name/plate/IMEI, filter by status,
+            click a unit — the map flies to it.</li>
+        <li><b>Map</b>: fleet status chips float on the map; click one to jump to that
+            vehicle. Click the marker for speed, address, last fix, altitude,
+            ignition and fuel where the device provides them.</li>
+        <li><b>Details panel</b> (right): live values, commands and the events list
+            (position, speeding, geofence, offline, harsh…).</li>
+        <li><b>Top bar</b>: Monitoring, Reports, Administration, Billing, the alert
+            bell, <b>Install</b> (desktop app), <b>User manual</b> and Sign out.
+            On a phone, the red buttons hide/show panels to give the map full screen.</li>
+      </ol>
+    </div>
+
+    <div class="card pad" id="states">
+      <h3>4 · Vehicle status explained</h3>
+      <ul class="hint" style="padding-left:20px">
+        <li><b>moving</b> — speed above the moving threshold (default 5 km/h) or
+            ignition on.</li>
+        <li><b>idle</b> — ignition on, vehicle standing (real ignition bit from the
+            device where available).</li>
+        <li><b>parked</b> — no motion for a while, device still reporting.</li>
+        <li><b>offline</b> — no data for longer than the online timeout
+            (default 30 minutes); turns back automatically on the next fix.</li>
+      </ul>
+      <p class="hint">Colour chips in the unit list and on the map always show the
+        current state; the exact time of the last fix is under the marker details.</p>
+    </div>
+  </div>
+  <div class="grid cols-2" style="margin-top:16px">
+    <div class="card pad" id="alerts">
+      <h3>5 · Alerts and the notification bell</h3>
+      <ol class="hint" style="padding-left:20px">
+        <li>The <b>bell</b> in the top bar shows a red badge with the number of
+            <b>unacknowledged</b> alerts for your account (super admins: for all
+            accounts).</li>
+        <li>Open it to see each alert: reason, device, driver, account, time and
+            location link. New alerts play two short beeps and vibrate the phone.</li>
+        <li>Press <b>Acknowledge all</b> to silence the badge — acknowledgement is
+            shared, so the whole team sees it was handled.</li>
+        <li>The list refreshes every 20 seconds; with the app installed you also get
+            a <b>number badge</b> on the desktop icon/task bar and in the title.</li>
+      </ol>
+    </div>
+
+    <div class="card pad" id="rules">
+      <h3>6 · Alert rules (e-mail, Telegram, push)</h3>
+      <p class="hint">Administration → <b>Notifications</b> → New rule. Rule types:</p>
+      <ul class="hint" style="padding-left:20px">
+        <li><b>offline</b> — no data for N minutes; <b>speed</b> — over the limit
+            (global, per-rule or geofence limit); <b>geofence</b> — enter/exit;</li>
+        <li><b>harsh</b> — hard braking / rapid acceleration above the threshold
+            (one per minute cooldown); plus ignition, SOS, power cut, fuel drop/fill
+            and movement where the device supports them.</li>
+      </ul>
+      <p class="hint"><b>Delivery channels</b> (per rule + platform-wide):</p>
+      <ul class="hint" style="padding-left:20px">
+        <li><b>Bell</b> — always, in the console.</li>
+        <li><b>E-mail</b> — to the account's admins and the super admin (needs SMTP
+            in Plans &amp; billing).</li>
+        <li><b>Telegram</b> — instant message to your phone; while an alert stays
+            unacknowledged it repeats every 30 seconds (max 10 minutes), then stops.</li>
+        <li><b>Phone push</b> — native banner at the top of the screen even when the
+            app is closed; tap it to open KIVU (enable once: bell →
+            <b>Enable phone alerts</b>).</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="grid cols-2" style="margin-top:16px">
+    <div class="card pad" id="devices">
+      <h3>7 · Adding a GPS device or the phone app</h3>
+      <ol class="hint" style="padding-left:20px">
+        <li>Administration → <b>Units</b> → New. Choose the hardware type from the
+            supported-device list (car scanners, bike, phone…).</li>
+        <li>Enter the device's <b>IMEI</b> (or unique ID) exactly as printed on it.</li>
+        <li>Power the device; when it reaches the server its state turns
+            <b>online</b> and the marker appears. GT06 and EasyTrack devices connect
+            to the public bridge port automatically.</li>
+        <li>Optional: assign a <b>driver</b>, fuel/commands and a speed limit to the
+            unit.</li>
+      </ol>
+      <p class="hint"><b>Phone as tracker:</b> Get the app → install → ⋮ menu →
+        <b>Start tracker mode</b> after entering the unit unique ID and device
+        password — the phone then reports its own GPS like a hardware unit.</p>
+    </div>
+
+    <div class="card pad" id="reports">
+      <h3>8 · Reports and exports</h3>
+      <ol class="hint" style="padding-left:20px">
+        <li>Top bar → <b>Reports</b>.</li>
+        <li>Pick the units, the date range and the report type.</li>
+        <li>Generate — then <b>print</b> or <b>export CSV</b> (downloads are handed
+            straight to the browser / phone).</li>
+      </ol>
+      <p class="hint">The events list and audit trails live in the details panel and
+        Administration, and can be filtered the same way.</p>
+    </div>
+  </div>
+  <div class="grid cols-2" style="margin-top:16px">
+    <div class="card pad" id="admin">
+      <h3>9 · Administration</h3>
+      <ul class="hint" style="padding-left:20px">
+        <li><b>Users</b> — create accounts, set roles, reset passwords, e-mail
+            addresses (used for alert e-mails).</li>
+        <li><b>Units</b> — devices, IMEIs, drivers, intervals, speed limits.</li>
+        <li><b>Drivers</b> — names assigned to vehicles (shown in alerts).</li>
+        <li><b>Geofences</b> — draw zones, set per-zone speed limits; enter/exit
+            becomes an alert rule.</li>
+        <li><b>Notifications</b> — the rules from section 6.</li>
+        <li><b>Settings</b> — platform name, logo, theme, online timeout, moving
+            threshold.</li>
+      </ul>
+    </div>
+
+    <div class="card pad" id="plans">
+      <h3>10 · Plans, billing and the super console</h3>
+      <ul class="hint" style="padding-left:20px">
+        <li><b>Billing</b> (admins) — current plan, trial countdown, invoices;
+            tracking pauses when a trial/plan ends but data stays readable.</li>
+        <li><b>Accounts</b> (super) — create customer accounts, seed their alert
+            rules, manage platform-wide settings.</li>
+        <li><b>Plans &amp; billing</b> (super) — prices, gateways and the
+            <b>SMTP host</b> for outgoing alert e-mails.</li>
+        <li>Super admins automatically receive a copy of every account's alert
+            e-mails and see every account's alerts in the bell.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="grid cols-2" style="margin-top:16px">
+    <div class="card pad" id="mobile">
+      <h3>11 · Mobile: install, push, badge</h3>
+      <ol class="hint" style="padding-left:20px">
+        <li><b>Desktop:</b> press <b>Install</b> in the top bar — KIVU opens as its
+            own window without a URL bar, with the pin icon on the desktop/task bar
+            and the alert count as a badge. (Needs the HTTPS address.)</li>
+        <li><b>Android:</b> Get the app → <b>Download the APK</b> → install
+            (Android 6+). Log in once — the console remembers the server.</li>
+        <li><b>Push:</b> bell → <b>Enable phone alerts</b> (or use the app) —
+            banners arrive instantly even when the app is closed; tapping opens
+            KIVU.</li>
+        <li>The app never signs you out unless you press Sign out.</li>
+      </ol>
+    </div>
+
+    <div class="card pad" id="faq">
+      <h3>12 · Troubleshooting FAQ</h3>
+      <ul class="hint" style="padding-left:20px">
+        <li><b>Device stays offline</b> — check SIM/coverage, that the IMEI was
+            entered exactly, and that the tracker is configured for this server's
+            bridge port.</li>
+        <li><b>No e-mails</b> — SMTP is not configured yet (super: Plans &amp;
+            billing). The bell/Telegram/push work regardless.</li>
+        <li><b>Phone silent</b> — enable phone alerts in the bell, allow
+            notifications for the site/app in the OS settings, and use the HTTPS
+            address for the web version.</li>
+        <li><b>Map grey/banded</b> — pan once or resize; tiles load per view.</li>
+        <li><b>Signed out unexpectedly</b> — only Sign out or an administrator
+            disabling your account ends a session; otherwise it renews itself.</li>
+        <li><b>Wrong e-mail on an alert</b> — recipients come from the rule plus the
+            account's admin users; fix addresses under Administration → Users.</li>
+      </ul>
+    </div>
+  </div>
+
+  <p class="hint" style="margin-top:16px">
+    This manual matches platform version 2026-10 · <a href="/app">Return to the
+    console</a> · <a href="/download">Get the mobile app</a>
+  </p>
+</div>
+
+<script src="/js/common.js"></script>
+<script>
+  if (API.hasToken() && typeof renderTopBar === 'function') renderTopBar('manual');
+</script>
+</body>
+</html>

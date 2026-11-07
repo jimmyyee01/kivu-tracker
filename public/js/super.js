@@ -41,6 +41,8 @@ document.addEventListener('DOMContentLoaded', async function () {
   $('#btnNewPortal').addEventListener('click', newPortal);
   $('#btnLogoUpload').addEventListener('click', uploadLogo);
   $('#btnLogoRemove').addEventListener('click', removeLogo);
+  $('#btnReloadModules').addEventListener('click', loadModules);
+  $('#btnNewModule').addEventListener('click', () => editModule(null));
   $('#btnRunFinance').addEventListener('click', () => loadFinance(true));
   $('#btnFinanceAlerts').addEventListener('click', () => loadAlerts(true));
   $$('#paneReports button[data-csv]').forEach(b => b.addEventListener('click',
@@ -50,6 +52,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     const tab = ev.target.closest ? ev.target.closest('.tab') : null;
     if (!tab) return;
     if (tab.dataset.pane === 'paneAccounts') loadAccounts();
+    if (tab.dataset.pane === 'paneModules') loadModules();
     if (tab.dataset.pane === 'paneBilling') loadBilling();
     if (tab.dataset.pane === 'paneSettings') loadSettings();
     if (tab.dataset.pane === 'paneSystem') { loadHealth(); loadDevices(); loadAudit(); renderDeviceCatalogue(); }
@@ -57,6 +60,7 @@ document.addEventListener('DOMContentLoaded', async function () {
   });
   await loadAccounts();
   await loadSettings();
+  loadModules();
   loadBilling();
   loadHealth();
   loadDevices();
@@ -951,6 +955,7 @@ async function loadSettings() {
     ['default_zoom', 'Default zoom level', 'number'],
     ['online_timeout_s', 'Offline after (seconds)', 'number'],
     ['moving_speed_kmh', 'Moving threshold (km/h)', 'number'],
+    ['offline_alert_min', 'Offline ALERT after (minutes, default 10; 0 = use each rule\'s own value)', 'number'],
     ['retention_days', 'Message retention (days)', 'number'],
     ['portal_price', 'Reseller portal price (full year)', 'number'],
     ['ips_port', 'Wialon IPS TCP port', 'number'],
@@ -1039,3 +1044,193 @@ async function loadAudit() {
     rows: data.entries || []
   });
 }
+
+/* ------------------------------------------------------- business modules */
+const Modules = { list: [], detail: null };
+
+async function loadModules(showToast) {
+  try {
+    const data = await API.get('/api/modules');
+    Modules.list = data.modules || [];
+  } catch (e) {
+    $('#modulesTable').innerHTML = '<p class="muted">Modules unavailable: ' + h(e.message) + '</p>';
+    return;
+  }
+  renderTable($('#modulesTable'), {
+    columns: [
+      { key: 'name', label: 'Module', type: 'html' },
+      { key: 'slug', label: 'Slug' },
+      { key: 'tagline', label: 'Tagline' },
+      { key: 'base_path', label: 'Public path' },
+      { key: 'active', label: 'Status', type: 'html' },
+      { key: 'actions', label: '', type: 'html' }
+    ],
+    rows: Modules.list.map(m => Object.assign({}, m, {
+      name: (m.logo ? '<img src="' + h(m.logo) + '" alt="" style="height:18px;vertical-align:middle;margin-right:6px">' : '')
+        + '<b>' + h(m.name) + '</b>',
+      active: '<span class="chip ' + (m.is_active ? 'ok' : 'danger') + '">' + (m.is_active ? 'active' : 'disabled') + '</span>',
+      actions: '<button class="btn xs" data-mid="' + m.id + '" data-act="open">Configure</button> '
+        + '<button class="btn xs" data-mid="' + m.id + '" data-act="visit">Open</button> '
+        + '<button class="btn xs danger" data-mid="' + m.id + '" data-act="del">Delete</button>'
+    }))
+  });
+  $$('#modulesTable button[data-mid]').forEach(btn => btn.addEventListener('click', () => {
+    const id = btn.dataset.mid; const act = btn.dataset.act;
+    if (act === 'visit') location.href = '/' + (Modules.list.find(x => String(x.id) === String(id)) || {}).slug;
+    else if (act === 'del') deleteModule(id);
+    else openModule(id);
+  }));
+  if (showToast) toast('Modules refreshed', 'ok');
+}
+
+function editModule(m) {
+  m = m || {};
+  const t = m.theme || {};
+  const body = el('div', { class: 'grid2' });
+  const f = (name, label, val, type, opts) => {
+    const wrap = el('div', { class: 'field' + (type === 'textarea' ? ' span2' : '') });
+    wrap.appendChild(el('label', null, h(label)));
+    let input;
+    if (type === 'textarea') { input = el('textarea', { name, rows: '3' }); input.value = val || ''; }
+    else if (type === 'checkbox') { input = el('input', { type: 'checkbox', name }); input.checked = !!val; }
+    else { input = el('input', { type: type || 'text', name, value: val || '' }); }
+    if (opts) Object.keys(opts).forEach(k => input.setAttribute(k, opts[k]));
+    wrap.appendChild(input); body.appendChild(wrap); return input;
+  };
+  f('module_name', 'Module name', m.name);
+  f('module_slug', 'Slug (path)', m.slug, 'text', { placeholder: 'e.g. agriculture' });
+  f('system_url', 'System URL (subdomain)', t.system_url || t.console_url || '', 'text', { placeholder: 'https://agriculture.kivusystems.com' });
+  f('subdomain', 'Subdomain label', t.subdomain || m.slug || '', 'text', { placeholder: 'agriculture' });
+  f('tagline', 'Tagline', m.tagline);
+  f('logo_path', 'Logo path/URL', m.logo, 'text', { placeholder: '/img/branding/... or https://...' });
+  f('is_active', 'Active', m.is_active !== 0, 'checkbox');
+  f('sort_order', 'Sort order', m.sort_order || 100, 'number');
+  body.appendChild(el('div', { class: 'span2' }, '<hr><b>Theme (CSS variables)</b><p class="hint">These drive --primary-color/--accent-color and module surfaces.</p>'));
+  f('theme_primary', 'Primary color', t.primary || '#2f9cf4', 'color');
+  f('theme_accent', 'Accent color', t.accent || '#16a085', 'color');
+  f('theme_bg', 'Background', t.bg || '#0f1420', 'color');
+  f('theme_surface', 'Surface/panel', t.surface || '#161d2d', 'color');
+  f('theme_text', 'Text color', t.text || '#dfe6f2', 'color');
+  f('theme_font', 'Font family', t.font || 'system-ui, Segoe UI, Arial, sans-serif');
+  modal({
+    title: m.id ? 'Edit business model: ' + m.name : 'Create new business model',
+    body,
+    wide: true,
+    buttons: [
+      { label: 'Cancel', class: 'ghost' },
+      { label: 'Save module', class: 'primary', onClick: async (dlg) => {
+        const v = readForm(body);
+        const payload = {
+          id: m.id || '',
+          module_name: v.module_name, module_slug: v.module_slug, tagline: v.tagline,
+          logo_path: v.logo_path, is_active: v.is_active ? 1 : 0, sort_order: v.sort_order || 100,
+          theme_config: { primary: v.theme_primary, accent: v.theme_accent, bg: v.theme_bg,
+            surface: v.theme_surface, text: v.theme_text, font: v.theme_font,
+            mode: (v.theme_bg && /^#[fFeE]/.test(v.theme_bg)) ? 'light' : 'dark',
+            system_url: v.system_url || '', subdomain: v.subdomain || v.module_slug || '' }
+        };
+        try {
+          const path = m.id ? '/api/modules/' + m.id : '/api/modules';
+          await API.post(path, payload);
+          toast('Module saved', 'ok'); dlg.close(); loadModules();
+        } catch (e) { toast(e.message || 'Save failed', 'error'); }
+      }}
+    ]
+  });
+}
+
+async function openModule(id) {
+  try {
+    const data = await API.get('/api/modules/' + id);
+    Modules.detail = data;
+    renderModuleDetail(data);
+  } catch (e) { toast(e.message || 'Cannot load module', 'error'); }
+}
+
+function renderModuleDetail(data) {
+  const host = $('#moduleDetail');
+  host.innerHTML = '';
+  const m = data.module || {};
+  const card = el('div', { class: 'card pad' });
+  card.appendChild(el('div', { class: 'row wrap' },
+    '<h3 style="margin:0">' + h(m.name) + '</h3><span class="chip info">/' + h(m.slug) + '</span>'
+    + '<span class="spacer" style="flex:1"></span>'));
+  const actions = el('div', { class: 'row wrap', style: 'margin:10px 0' });
+  const launchUrl = (data.theme_config && (data.theme_config.system_url || data.theme_config.console_url)) || (m.slug === 'telematics' ? '/app' : ('/m/' + m.slug));
+  const openLink = el('a', { class: 'btn sm', href: launchUrl }, 'Open system');
+  if (/^https?:\/\//i.test(launchUrl)) { openLink.target = '_blank'; openLink.rel = 'noopener'; }
+  const editBtn = el('button', { class: 'btn sm' }, 'Edit module'); editBtn.onclick = () => editModule(Object.assign({}, m, { theme: data.theme_config }));
+  const logoBtn = el('button', { class: 'btn sm' }, 'Upload logo'); logoBtn.onclick = () => uploadModuleLogo(m.id);
+  const pageBtn = el('button', { class: 'btn sm primary' }, '+ Add page'); pageBtn.onclick = () => editModulePage(m.id, null);
+  actions.append(openLink, editBtn, logoBtn, pageBtn); card.appendChild(actions);
+  if (data.theme_config && data.theme_config.system_url) card.appendChild(el('p', { class: 'hint', style: 'margin-top:0' }, 'System subdomain: <span class="mono">' + h(data.theme_config.system_url) + '</span>'));
+  card.appendChild(el('h4', null, 'Dynamic pages & navigation'));
+  renderTable(card.appendChild(el('div')), {
+    columns: [{ key: 'title', label: 'Title' }, { key: 'slug', label: 'Slug' }, { key: 'nav_position', label: 'Nav pos', type: 'number' },
+      { key: 'show_in_nav', label: 'In nav' }, { key: 'status', label: 'Status', type: 'html' }, { key: 'actions', label: '', type: 'html' }],
+    rows: (data.pages || []).map(p => Object.assign({}, p, {
+      show_in_nav: p.show_in_nav ? 'yes' : 'no',
+      status: '<span class="chip ' + (p.status === 'published' ? 'ok' : 'warn') + '">' + h(p.status) + '</span>',
+      actions: '<button class="btn xs" data-pid="' + p.id + '" data-mid="' + m.id + '" data-act="ep">Edit</button> '
+        + '<button class="btn xs danger" data-pid="' + p.id + '" data-act="dp">Delete</button>'
+    }))
+  });
+  $$( 'button[data-pid]', card).forEach(btn => btn.addEventListener('click', async () => {
+    if (btn.dataset.act === 'dp') {
+      if (!confirm('Delete this page?')) return;
+      await API.del('/api/module-pages/' + btn.dataset.pid); toast('Page deleted', 'ok'); openModule(m.id);
+    } else {
+      const pd = await API.get('/api/module-pages/' + btn.dataset.pid);
+      editModulePage(m.id, pd.page || pd);
+    }
+  }));
+  host.appendChild(card);
+}
+
+function uploadModuleLogo(moduleId) {
+  const body = el('div');
+  body.innerHTML = '<div class="field"><label>Logo image</label><input type="file" id="modLogoFile" accept="image/*"></div><p class="hint">Stored in /img/branding/ (same validation as platform logo).</p>';
+  modal({ title: 'Upload module logo', body, buttons: [
+    { label: 'Cancel', class: 'ghost' },
+    { label: 'Upload', class: 'primary', onClick: async (dlg) => {
+      const file = $('#modLogoFile', body).files[0]; if (!file) { toast('Choose a file', 'warn'); return; }
+      const fd = new FormData(); fd.append('logo', file);
+      await fetch('/api/modules/' + moduleId + '/logo', { method: 'POST', headers: { 'X-Auth-Token': API.token() }, body: fd })
+        .then(r => r.json()).then(d => { if (!d.ok) throw new Error(d.error || 'Upload failed'); });
+      toast('Logo uploaded', 'ok'); dlg.close(); loadModules(); openModule(moduleId);
+    }}
+  ]});
+}
+
+function editModulePage(moduleId, p) {
+  p = p || {};
+  const content = (p.content && p.content.blocks) ? JSON.stringify(p.content, null, 2) : JSON.stringify(p.content || { blocks: [{ type:'hero', props:{ title:p.title||'New page', subtitle:'' } }] }, null, 2);
+  const body = el('div');
+  body.innerHTML = '<div class="grid2">'
+    + '<div class="field"><label>Title</label><input name="title" value="' + h(p.title||'') + '"></div>'
+    + '<div class="field"><label>Slug</label><input name="slug" value="' + h(p.slug||'') + '" placeholder="home, pricing, about"></div>'
+    + '<div class="field"><label>Nav position</label><input name="nav_position" type="number" value="' + h(p.nav_position||100) + '"></div>'
+    + '<div class="field"><label>Status</label><select name="status"><option value="draft">draft</option><option value="published">published</option></select></div>'
+    + '<div class="field span2"><label><input type="checkbox" name="show_in_nav" ' + (p.show_in_nav?'checked':'') + '> Show in navigation</label></div>'
+    + '<div class="field span2"><label>Content (JSON blocks: hero/feature/kpi/cta/actions/html)</label><textarea name="content" rows="14" style="font-family:monospace;font-size:12px">' + h(content) + '</textarea></div>'
+    + '</div>';
+  $('select[name=status]', body).value = p.status || 'draft';
+  modal({ title: p.id ? 'Edit page' : 'Add module page', body, wide: true, buttons: [
+    { label: 'Cancel', class: 'ghost' },
+    { label: 'Save page', class: 'primary', onClick: async (dlg) => {
+      const v = readForm(body);
+      let parsed; try { parsed = JSON.parse(v.content || '{}'); } catch (e) { toast('Content must be valid JSON', 'error'); return; }
+      const path = p.id ? '/api/module-pages/' + p.id : '/api/modules/' + moduleId + '/pages';
+      await API.post(path, { id: p.id||'', module_id: moduleId, title: v.title, slug: v.slug, nav_position: v.nav_position, status: v.status, show_in_nav: v.show_in_nav?1:0, content: parsed, content_type: 'blocks' });
+      toast('Page saved', 'ok'); dlg.close(); openModule(moduleId);
+    }}
+  ]});
+}
+
+async function deleteModule(id) {
+  const m = Modules.list.find(x => String(x.id) === String(id));
+  if (!confirm('Delete module "' + ((m||{}).name||id) + '"? Core modules can only be disabled.')) return;
+  try { await API.del('/api/modules/' + id); toast('Module deleted', 'ok'); loadModules(); $('#moduleDetail').innerHTML=''; }
+  catch (e) { toast(e.message || 'Delete failed', 'error'); }
+}
+

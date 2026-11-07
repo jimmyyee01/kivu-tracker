@@ -24,6 +24,8 @@ function param_value(array $params, array $names): ?float {
 const PARAM_IGNITION = ['ign', 'ignition', 'acc', 'ign_status'];
 const PARAM_FUEL     = ['fuel', 'f1', 'F1', 'fuel_level', 'fuel1'];
 const PARAM_VOLTAGE  = ['pwr', 'voltage', 'vbat', 'bat', 'power'];
+const PARAM_BATTERY  = ['battery', 'battery_pct', 'bat_pct', 'batt'];
+const PARAM_WEIGHT   = ['weight', 'weight_kg', 'mass', 'load', 'gross_weight', 'axle_weight'];
 const PARAM_HDOP     = ['hdop'];
 const PARAM_TEMP     = ['temp', 'temperature'];
 const PARAM_MILEAGE  = ['mileage', 'odometer', 'odo', 'count1'];
@@ -32,8 +34,12 @@ const PARAM_SOS      = ['sos', 'alarm', 'panic'];
 
 /* Normalises any incoming packet into the canonical message shape. */
 function canonical_message(array $raw): array {
-    $p = $raw['params'] ?? [];
-    if (!is_array($p)) $p = [];
+    $p = $raw['params'] ?? null;
+    /* flat HTTP points (the phone app posts them like this) double as their own
+       params, so optional keys such as battery/voltage/ignition survive — but the
+       core position fields stay out of params_json so exports stay clean. */
+    if (!is_array($p)) $p = array_diff_key($raw, array_flip(
+        ['ts', 'lat', 'lon', 'speed', 'course', 'alt', 'sats', 'valid', 'source', 'ip', 'params']));
     $ign = param_value($p, PARAM_IGNITION);
     $msg = [
         'ts' => dt_param($raw['ts'] ?? null, now_dt()),
@@ -47,6 +53,8 @@ function canonical_message(array $raw): array {
         'ignition' => $ign === null ? null : ($ign > 0 ? 1 : 0),
         'fuel' => param_value($p, PARAM_FUEL),
         'voltage' => param_value($p, PARAM_VOLTAGE),
+        'battery' => param_value($p, PARAM_BATTERY),
+        'weight' => param_value($p, PARAM_WEIGHT),
         'temperature' => param_value($p, PARAM_TEMP),
         'mileage' => param_value($p, PARAM_MILEAGE),
         'engine_hours' => param_value($p, PARAM_EHOURS),
@@ -129,23 +137,50 @@ function ingest_point(array $unit, array $raw): array {
     $res['distance_km'] = round($distKm, 4);
 
     /* ---- store the message -------------------------------------------- */
-    $ins = db()->prepare('INSERT INTO messages (unit_id,ts,lat,lon,speed,course,alt,sats,hdop,ignition,fuel,voltage,mileage,engine_hours,params_json,valid,source,created_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+    $ins = db()->prepare('INSERT INTO messages (unit_id,ts,lat,lon,speed,course,alt,sats,hdop,ignition,fuel,voltage,battery,weight,mileage,engine_hours,params_json,valid,source,created_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
     $ins->execute([$unit['id'], $m['ts'], $m['lat'], $m['lon'], $m['speed'], $m['course'], $m['alt'], $m['sats'],
-        $m['hdop'], $m['ignition'], $m['fuel'], $m['voltage'], $m['mileage'], $m['engine_hours'],
+        $m['hdop'], $m['ignition'], $m['fuel'], $m['voltage'], $m['battery'], $m['weight'], $m['mileage'], $m['engine_hours'],
         $m['params'] ? jenc($m['params']) : null, $m['valid'], $m['source'], now_dt()]);
     $res['message_id'] = (int)db()->lastInsertId();
+
+    /* ---- device session (Administration -> Device log) ------------------ */
+    /* The protocol bridge feeds us over HTTP instead of opening an IPS login,
+       so keep device_sessions alive here: close a session silent for >10 min,
+       otherwise bump packets, else open a fresh row. The freshness gate keeps
+       history backfills out of the connection log. */
+    if (abs(time() - (int)strtotime($m['ts'])) <= 600) {
+        $ip = (string)($raw['ip'] ?? '') ?: (string)($_SERVER['REMOTE_ADDR'] ?? '');
+        $proto = $m['source'] !== 'ips' ? (string)$m['source']
+            : (preg_match('/^(127\.|::1)/', (string)($_SERVER['REMOTE_ADDR'] ?? '')) ? 'bridge' : 'ips');
+        db()->prepare('UPDATE device_sessions SET logout_ts = last_ts WHERE unit_id = ? AND logout_ts IS NULL AND last_ts < ?')
+            ->execute([$unit['id'], date('Y-m-d H:i:s', (int)strtotime($m['ts']) - 600)]);
+        $stS = db()->prepare('SELECT id FROM device_sessions WHERE unit_id = ? AND logout_ts IS NULL ORDER BY id DESC LIMIT 1');
+        $stS->execute([$unit['id']]);
+        $sidS = $stS->fetchColumn();
+        if ($sidS) {
+            db()->prepare('UPDATE device_sessions SET last_ts = ?, packets = packets + 1, ip = ? WHERE id = ?')
+                ->execute([$m['ts'], $ip !== '' ? $ip : null, (int)$sidS]);
+        } else {
+            db()->prepare('INSERT INTO device_sessions (unit_id,unique_id,protocol,login_ts,last_ts,packets,ip) VALUES (?,?,?,?,?,1,?)')
+                ->execute([$unit['id'], (string)($unit['unique_id'] ?? ''), $proto, $m['ts'], $m['ts'],
+                           $ip !== '' ? $ip : null]);
+        }
+    }
 
     if ($m['valid'] !== 1) return $res;      // invalid fixes never touch the live state
 
     /* ---- unit live state ---------------------------------------------- */
     $set = ['last_time = ?', 'last_lat = ?', 'last_lon = ?', 'last_speed = ?', 'last_course = ?',
-            'last_alt = ?', 'last_sats = ?', 'online = 1', 'moving = ?'];
-    $vals = [$m['ts'], $m['lat'], $m['lon'], $m['speed'], $m['course'], $m['alt'], $m['sats'],
+            'last_alt = COALESCE(?, last_alt)', 'last_sats = ?', 'online = 1', 'moving = ?'];
+    // packets without an altitude (GT06 0x22, EasyTrack HB) must not reset last_alt to 0
+    $vals = [$m['ts'], $m['lat'], $m['lon'], $m['speed'], $m['course'], ($m['alt'] ?: null), $m['sats'],
              $m['speed'] > $movingSpeed ? 1 : 0];
     if ($m['ignition'] !== null) { $set[] = 'last_ignition = ?'; $vals[] = $m['ignition']; }
     if ($m['fuel'] !== null) { $set[] = 'last_fuel = ?'; $vals[] = $m['fuel']; }
     if ($m['voltage'] !== null) { $set[] = 'last_voltage = ?'; $vals[] = $m['voltage']; }
+    if ($m['battery'] !== null) { $set[] = 'last_battery = ?'; $vals[] = max(0, min(100, (int)round((float)$m['battery']))); }
+    if ($m['weight'] !== null) { $set[] = 'last_weight = ?'; $vals[] = round(max(0, (float)$m['weight']), 2); }
     if ($distKm > 0) { $set[] = 'odometer_km = odometer_km + ?'; $vals[] = $distKm; }
     if ($m['engine_hours'] !== null) { $set[] = 'engine_hours = ?'; $vals[] = $m['engine_hours']; }
     elseif ($m['ignition'] === 1 && $prev && (int)$prev['ignition'] === 1) {

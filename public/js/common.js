@@ -206,7 +206,7 @@ function toast(message, type, ms) {
 /* --------------------------------------------------------------- modals */
 function modal(opts) {
   opts = opts || {};
-  const back = el('div', { class: 'modal-back' });
+  const back = el('div', { class: 'modal-back' + (opts.passThrough ? ' pass' : '') });
   const card = el('div', { class: 'modal' + (opts.wide ? ' wide' : '') });
   const head = el('div', { class: 'modal-head' }, '<h3>' + h(opts.title || '') + '</h3>');
   const closeBtn = el('button', { class: 'btn ghost right', text: '\u2715' });
@@ -508,7 +508,11 @@ async function loadMeta() {
   State.reportTypes = State.meta.report_types || [];
   State.currency = (State.meta.settings && State.meta.settings.currency) || 'USD';
   State.onlineTimeout = (State.meta.settings && State.meta.settings.online_timeout_s) || 300;
+  State.module = State.meta.module || null;
+  State.modules = State.meta.modules || [];
+  State.moduleNav = State.meta.module_nav || [];
   applyTheme();
+  applyModuleTheme(State.meta);
   return State.meta;
 }
 async function loadUnitsLive(extra) {
@@ -740,11 +744,22 @@ function updateSupportAssistantLogo() {
 }
 document.addEventListener('DOMContentLoaded', initSupportAssistant);
 
+/* ------------------------------------------------------- mobile app? ---- */
+/* The Android client identifies itself with "KIVU-Tracker-Android/<version>"
+   and every Android WebView also carries "; wv" in its user agent. Features
+   that only make sense on a desktop (the website content manager) are hidden
+   here — and refused by the server as well, so the URL alone is not enough. */
+function isMobileApp() {
+  const ua = (navigator && navigator.userAgent) || '';
+  if (/kivu[-_ ]?tracker[-_ ]?android|kivu[-_ ]?app/i.test(ua)) return true;
+  return /android/i.test(ua) && /wv/i.test(ua);
+}
+
 /* ---------------------------------------------------------------- top bar */
 function renderTopBar(active) {
   const role = State.user ? State.user.role : '';
   const bar = el('div', { class: 'topbar no-print' });
-  bar.appendChild(el('div', { class: 'brand' }, '<span class="logo"></span><span>'
+  bar.appendChild(el('a', { class: 'brand', href: '/app' }, '<span class="logo"></span><span>'
     + h((State.meta && State.meta.platform) || 'KIVU Tracker') + '</span>'));
   const nav = el('nav', { class: 'topbar-nav', id: 'primaryNavigation', 'aria-label': 'Main navigation' });
   const navToggle = el('button', {
@@ -765,22 +780,38 @@ function renderTopBar(active) {
   bar.appendChild(navToggle);
   const links = [
     { href: '/app', label: 'Monitoring', match: 'app', roles: ['super', 'admin', 'operator', 'viewer'] },
+    { href: '/m/agriculture', label: 'AgriSmart', match: 'agri', roles: ['super', 'admin', 'operator', 'viewer'] },
+    { href: '/m/health', label: 'HealthConnect', match: 'health', roles: ['super', 'admin', 'operator', 'viewer'] },
     { href: '/reports', label: 'Reports', match: 'reports', roles: ['super', 'admin', 'operator', 'viewer'] },
     { href: '/admin', label: 'Administration', match: 'admin', roles: ['super', 'admin', 'operator'] },
     { href: '/billing', label: 'Billing', match: 'billing', roles: ['super', 'admin'] },
     { href: '/super', label: 'Accounts', match: 'super', roles: ['super'] },
     { href: '/reseller', label: 'My portal', match: 'reseller', roles: ['reseller'] },
     { href: '/download', label: 'Get the app', match: 'download',
-      roles: ['super', 'admin', 'operator', 'viewer', 'reseller'] }
+      roles: ['super', 'admin', 'operator', 'viewer', 'reseller'] },
+    { href: '/manual', label: 'User manual', match: 'manual',
+      roles: ['super', 'admin', 'operator', 'viewer', 'reseller'] },
+    /* website content manager: platform or account admin, on a desktop
+       browser only — never in the mobile app (the server refuses it there) */
+    { href: '/cms', label: 'Website', match: 'cms', roles: ['super', 'admin'], desktopOnly: true }
   ];
   links.forEach(l => {
     if (l.roles.indexOf(role) < 0) return;
+    if (l.desktopOnly && isMobileApp()) return;
     nav.appendChild(el('a', { class: 'navlink' + (active === l.match ? ' active' : ''), href: l.href }, h(l.label)));
   });
+  /* the account's own typed content (help page) when it has one */
+  const cmsHelp = State.meta && State.meta.cms ? State.meta.cms : null;
+  if (cmsHelp && cmsHelp.help_url) {
+    nav.appendChild(el('a', { class: 'navlink' + (active === 'help' ? ' active' : ''), href: cmsHelp.help_url },
+      h(cmsHelp.help_title || 'Help')));
+  }
   bar.appendChild(nav);
   bar.appendChild(el('div', { class: 'spacer' }));
   /* theme switch — rendered always, hidden when the super admin locked the
      theme (theme_mode = dark / light disables both modes platform-wide) */
+  initAlertBell(bar);
+  initPWA(bar);
   const themeBtn = el('button', { class: 'btn sm ghost', id: 'themeBtn', type: 'button' });
   themeBtn.addEventListener('click', toggleTheme);
   bar.appendChild(themeBtn);
@@ -818,16 +849,50 @@ const Theme = {
     return (m === 'dark' || m === 'light') ? m : Theme.pref();
   }
 };
+/* ------------------------------------------------------- module theming -- */
+function applyModuleTheme(meta) {
+  meta = meta || State.meta || {};
+  const mod = meta.module || (typeof window !== 'undefined' ? window.KivuModule : null);
+  if (!mod) return;
+  State.module = mod;
+  State.modules = meta.modules || State.modules || [];
+  State.moduleNav = meta.module_nav || State.moduleNav || [];
+  const theme = mod.theme || {};
+  const root = document.documentElement;
+  const set = (k, v) => { if (v) root.style.setProperty(k, v); };
+  set('--primary-color', theme.primary);
+  set('--accent-color', theme.accent);
+  set('--module-bg', theme.bg);
+  set('--module-surface', theme.surface);
+  set('--module-text', theme.text);
+  set('--font-body', theme.font);
+  set('--accent', theme.primary);
+  set('--accent-2', theme.accent);
+  if (mod.logo) brandingRemember(mod.logo);
+  if (mod.name && !document.body.dataset.module) document.body.dataset.module = mod.slug || '';
+}
+
+function moduleLink(match) {
+  const mods = (State.meta && State.meta.modules) || [];
+  const find = (s) => mods.find((m) => m && m.slug === s) || null;
+  const m = match === 'agri' ? find('agriculture') : (match === 'health' ? find('health') : null);
+  if (match === 'agri') return { href: (m && m.launch_url) || (m && m.console_path) || '/m/agriculture', label: (m && m.name) || 'AgriSmart', match: 'agri', roles: ['super','admin','operator','viewer'] };
+  if (match === 'health') return { href: (m && m.launch_url) || (m && m.console_path) || '/m/health', label: (m && m.name) || 'HealthConnect', match: 'health', roles: ['super','admin','operator','viewer'] };
+  return null;
+}
+
 function applyTheme() {
   document.documentElement.setAttribute('data-theme', Theme.effective());
+  applyModuleTheme(State.meta);
   const btn = document.getElementById('themeBtn');
   if (!btn) return;
   const locked = Theme.mode() !== 'user';
   btn.style.display = locked ? 'none' : '';
-  btn.textContent = Theme.effective() === 'light' ? '🌙' : '☀️';
+  btn.textContent = Theme.effective() === 'light' ? 'Dark' : 'Light';
   btn.title = locked ? 'The platform theme is set by the administrator'
     : 'Switch between dark and light mode';
 }
+
 function toggleTheme() {
   Theme.setPref(Theme.effective() === 'light' ? 'dark' : 'light');
   applyTheme();
@@ -942,41 +1007,93 @@ function showPaymentRequired(message) {
 }
 
 /* ------------------------------------------------------------- map styles - */
-/* Extra FREE tile layers. The platform map (settings.map_tiles) stays the
-   default ("Platform default"); the choice is remembered per browser. */
+/* Every FREE raster tile layer the console can reach WITHOUT an API key,
+   grouped by provider. The platform map (settings.map_tiles) stays the
+   default ("Map: platform default") and the choice is remembered per browser.
+
+   maxZoom is per provider — picking a layer also lifts the zoom ceiling so
+   "Google Satellite" and "Esri World Imagery" can zoom past the OSM 19 limit.
+
+   The Google entries use the classic mt1.google.com/vt endpoints (no key,
+   no billing account). They are unofficial endpoints: if Google ever blocks
+   them the layer simply stops drawing tiles — pick any other layer. */
 const MAP_STYLES = [
-  { id: 'default', label: 'Map: platform default', url: '' },
-  { id: 'osm', label: 'OpenStreetMap (standard)', url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png' },
-  { id: 'topo', label: 'OpenTopoMap (terrain)', url: 'https://tile.opentopomap.org/{z}/{x}/{y}.png' },
-  { id: 'hot', label: 'OSM Humanitarian', url: 'https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png' },
-  { id: 'cyclosm', label: 'CyclOSM (cycling)', url: 'https://a.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png' },
-  { id: 'carto_light', label: 'Carto Positron (light)', url: 'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png' },
-  { id: 'carto_dark', label: 'Carto Dark Matter (dark)', url: 'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png' }
+  /* ---- platform default + OpenStreetMap family ---- */
+  { id: 'default', group: 'Default', label: 'Map: platform default', url: '', maxZoom: 19 },
+  { id: 'osm', group: 'OpenStreetMap', label: 'OSM Standard', url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', maxZoom: 19 },
+  { id: 'hot', group: 'OpenStreetMap', label: 'OSM Humanitarian', url: 'https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', maxZoom: 19 },
+  { id: 'cyclosm', group: 'OpenStreetMap', label: 'CyclOSM (cycling)', url: 'https://a.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png', maxZoom: 20 },
+  { id: 'osm_de', group: 'OpenStreetMap', label: 'OSM Germany', url: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png', maxZoom: 18 },
+  { id: 'osm_fr', group: 'OpenStreetMap', label: 'OSM France', url: 'https://a.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png', maxZoom: 20 },
+  /* No Wikimedia layer on purpose: maps.wikimedia.org answers 403 to any
+     third-party Referer (browser) and to non-browser user agents. */
+
+  /* ---- Google (free tiles, no API key) ---- */
+  { id: 'google_road', group: 'Google (free)', label: 'Google Roadmap', url: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', maxZoom: 21 },
+  { id: 'google_sat', group: 'Google (free)', label: 'Google Satellite', url: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', maxZoom: 21 },
+  { id: 'google_hybrid', group: 'Google (free)', label: 'Google Hybrid (sat + labels)', url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', maxZoom: 21 },
+  { id: 'google_terrain', group: 'Google (free)', label: 'Google Terrain', url: 'https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', maxZoom: 21 },
+
+  /* ---- Esri / ArcGIS (free World services) ---- */
+  { id: 'esri_sat', group: 'Esri ArcGIS', label: 'Esri World Imagery (satellite)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', maxZoom: 19 },
+  { id: 'esri_street', group: 'Esri ArcGIS', label: 'Esri Street Map', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', maxZoom: 19 },
+  { id: 'esri_topo', group: 'Esri ArcGIS', label: 'Esri Topographic', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', maxZoom: 19 },
+  { id: 'esri_gray', group: 'Esri ArcGIS', label: 'Esri Light Gray Canvas', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', maxZoom: 16 },
+  { id: 'esri_natgeo', group: 'Esri ArcGIS', label: 'Esri NatGeo', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}', maxZoom: 16 },
+  { id: 'esri_dark', group: 'Esri ArcGIS', label: 'Esri Dark Gray Canvas', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', maxZoom: 16 },
+  { id: 'esri_relief', group: 'Esri ArcGIS', label: 'Esri Shaded Relief', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}', maxZoom: 13 },
+  { id: 'esri_ocean', group: 'Esri ArcGIS', label: 'Esri Ocean', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}', maxZoom: 13 },
+
+  /* ---- Carto basemaps ---- */
+  { id: 'carto_light', group: 'Carto', label: 'Carto Positron (light)', url: 'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', maxZoom: 20 },
+  { id: 'carto_dark', group: 'Carto', label: 'Carto Dark Matter (dark)', url: 'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', maxZoom: 20 },
+  { id: 'carto_voyager', group: 'Carto', label: 'Carto Voyager', url: 'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png', maxZoom: 20 },
+  { id: 'carto_nolabels', group: 'Carto', label: 'Carto Voyager (no labels)', url: 'https://a.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png', maxZoom: 20 },
+
+  /* ---- terrain and national coverage ---- */
+  { id: 'topo', group: 'Terrain & other', label: 'OpenTopoMap (terrain)', url: 'https://tile.opentopomap.org/{z}/{x}/{y}.png', maxZoom: 17 },
+  { id: 'usgs', group: 'Terrain & other', label: 'USGS Topo (US only)', url: 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}', maxZoom: 16 }
 ];
 function mapStyleId() {
   try { return localStorage.getItem('kivu_map') || 'default'; } catch (e) { return 'default'; }
 }
+/* The whole entry (url + maxZoom) for the saved choice. */
+function mapStyle() {
+  return MAP_STYLES.find(x => x.id === mapStyleId()) || MAP_STYLES[0];
+}
 /* '' means "use the platform tiles" (the default). */
 function mapStyleUrl() {
-  const s = MAP_STYLES.find(x => x.id === mapStyleId()) || MAP_STYLES[0];
-  return s.url || '';
+  return mapStyle().url || '';
 }
-/* The picker itself — drop it into any toolbar. */
+/* The picker itself — drop it into any toolbar. Layers are grouped by
+   provider so "all providers" stay readable. onPick(url, style) */
 function mapStyleSelect(onPick) {
-  const sel = el('select', { id: 'mapStyle', title: 'Map style',
-    style: 'width:auto;max-width:200px;padding:5px 7px' });
-  MAP_STYLES.forEach(s => sel.appendChild(el('option', { value: s.id }, s.label)));
+  const sel = el('select', { id: 'mapStyle', title: 'Map provider / layer',
+    style: 'width:auto;max-width:230px;padding:5px 7px' });
+  const groups = [];
+  MAP_STYLES.forEach(s => {
+    const name = s.group || 'Maps';
+    let g = groups.find(x => x.name === name);
+    if (!g) {
+      g = { name: name, node: el('optgroup', { label: name }) };
+      groups.push(g);
+      sel.appendChild(g.node);
+    }
+    g.node.appendChild(el('option', { value: s.id }, s.label));
+  });
   sel.value = mapStyleId();
+  if (!sel.value) sel.value = MAP_STYLES[0].id;   /* stale/unknown saved value */
   sel.addEventListener('change', () => {
     try { localStorage.setItem('kivu_map', sel.value); } catch (e) { /* ignore */ }
-    if (onPick) onPick(mapStyleUrl());
+    if (onPick) onPick(mapStyleUrl(), mapStyle());
   });
   return sel;
 }
 function applyMapStyle(map) {
   if (!map || typeof map.setTiles !== 'function') return;
-  const url = mapStyleUrl() || (State.meta && State.meta.map_tiles) || '';
-  try { map.setTiles(url); } catch (e) { /* canvas backend may ignore tiles */ }
+  const st = mapStyle();
+  const url = st.url || (State.meta && State.meta.map_tiles) || '';
+  try { map.setTiles(url, { maxZoom: st.maxZoom || 19 }); } catch (e) { /* canvas backend may ignore tiles */ }
 }
 
 /* One glyph per asset type (captured at registration / on the unit) — used
@@ -1042,3 +1159,218 @@ function renderUnitTree(container, opts) {
   container.appendChild(wrap);
   return wrap;
 }
+
+/* ---------------------------------------------------------- alert bell -- */
+const ALERT_LABELS = {
+  offline: 'Device offline', speed: 'Over speed', harsh: 'Harsh driving',
+  geofence_enter: 'Entered geofence', geofence_exit: 'Left geofence',
+  movement: 'Movement started', idle: 'Long idling', ignition_on: 'Ignition ON',
+  ignition_off: 'Ignition OFF', sos: 'SOS / panic', fuel_drop: 'Fuel drop',
+  fuel_fill: 'Refuel', power_cut: 'Power cut', maintenance: 'Service due'
+};
+const ALERT_SEV = { info: '#2f9cf4', warning: '#f1c40f', critical: '#e74c3c' };
+let _alertCtx = null;
+function alertBeep() {
+  try {
+    if (!_alertCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      _alertCtx = new AC();
+    }
+    if (_alertCtx.state === 'suspended') _alertCtx.resume();
+    const t0 = _alertCtx.currentTime;
+    [0, 0.3].forEach(off => {                    /* two beeps */
+      const o = _alertCtx.createOscillator(), g = _alertCtx.createGain();
+      o.type = 'square';
+      o.frequency.setValueAtTime(880, t0 + off);
+      g.gain.setValueAtTime(0.0001, t0 + off);
+      g.gain.exponentialRampToValueAtTime(0.3, t0 + off + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + off + 0.2);
+      o.connect(g); g.connect(_alertCtx.destination);
+      o.start(t0 + off); o.stop(t0 + off + 0.22);
+    });
+  } catch (e) { /* audio unlocks after the first tap */ }
+  try { if (navigator.vibrate) navigator.vibrate([250, 120, 250]); } catch (e) {}
+}
+function alertRow(e) {
+  const label = ALERT_LABELS[e.type] || e.type || 'Alert';
+  const sev = ALERT_SEV[e.severity] || ALERT_SEV.warning;
+  let when = '';
+  try { when = e.ts ? new Date(e.ts).toLocaleString() : ''; } catch (err) { when = e.ts || ''; }
+  const who = [e.account || '', e.unit || '', e.driver || ''].filter(Boolean).join(' · ');
+  const loc = e.address ? e.address
+    : (e.lat !== null && e.lat !== undefined && e.lon !== null && e.lon !== undefined
+      ? Number(e.lat).toFixed(5) + ', ' + Number(e.lon).toFixed(5) : '');
+  return '<div class="alert-item">'
+    + '<div class="a-top"><span class="dot" style="background:' + sev + '"></span><span>' + h(label) + '</span>'
+    + '<span class="a-when">' + h(when) + '</span></div>'
+    + '<div class="a-text">' + h(e.text || '') + '</div>'
+    + '<div class="a-meta">' + (who ? h(who) : '') + (loc ? (who ? ' · ' : '') + h(loc) : '') + '</div>'
+    + '</div>';
+}
+function initAlertBell(bar) {
+  const btn = el('button', { class: 'btn sm ghost alert-btn', type: 'button',
+    'aria-expanded': 'false', 'aria-label': 'Alerts' },
+    '<span class="bell-ico">&#128276;</span><span class="alert-badge hidden" id="alertBadge">0</span>');
+  const panel = el('div', { class: 'alert-panel hidden', id: 'alertPanel', 'aria-label': 'Alerts' });
+  bar.appendChild(btn);
+  bar.appendChild(panel);
+  /* browsers need one user gesture before any sound may play */
+  document.addEventListener('pointerdown', function unlock() {
+    try {
+      if (!_alertCtx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) _alertCtx = new AC(); }
+      if (_alertCtx && _alertCtx.state === 'suspended') _alertCtx.resume();
+    } catch (e) { /* ignore */ }
+    document.removeEventListener('pointerdown', unlock);
+  }, { once: true });
+
+  const known = new Set();
+  let first = true, last = [];
+
+  function toggle(open) {
+    const on = open === undefined ? panel.classList.contains('hidden') : open;
+    panel.classList.toggle('hidden', !on);
+    btn.setAttribute('aria-expanded', String(on));
+    if (on) render();
+  }
+  function render() {
+    panel.innerHTML = '<div class="alert-head"><b>Alerts</b>'
+      + '<span class="right"><button class="btn sm" type="button" id="ackAllBtn">Acknowledge all</button>'
+      + '<button class="btn sm ghost" type="button" id="closeAlertsBtn" aria-label="Close">&#10005;</button></span></div>'
+      + '<div class="alert-list" id="alertList"></div>'
+      + '<div class="alert-foot" id="alertFoot"></div>';
+    const list = panel.querySelector('#alertList');
+    list.innerHTML = last.length ? last.map(alertRow).join('')
+      : '<p class="muted" style="padding:14px">No unacknowledged alerts.</p>';
+    panel.querySelector('#closeAlertsBtn').addEventListener('click', () => toggle(false));
+    wireAlertFoot(panel);
+    panel.querySelector('#ackAllBtn').addEventListener('click', async () => {
+      try { await API.post('/api/events/ack', {}); } catch (e) { /* toast shown */ }
+      known.clear();
+      await poll(true);
+      render();
+    });
+  }
+  btn.addEventListener('click', e => { e.stopPropagation(); toggle(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') toggle(false); });
+  document.addEventListener('click', e => {
+    if (panel.classList.contains('hidden')) return;
+    if (!panel.contains(e.target) && !btn.contains(e.target)) toggle(false);
+  });
+
+  async function poll(silent) {
+    try {
+      const r = await API.get('/api/events?acknowledged=0&limit=100');
+      last = (r && r.events) || [];
+      const badge = document.getElementById('alertBadge');
+      if (badge) {
+        badge.textContent = last.length > 99 ? '99+' : String(last.length);
+        badge.classList.toggle('hidden', last.length === 0);
+      }
+      applyAppBadge(last.length); /* taskbar / home-screen count for this login */
+      const fresh = last.filter(e => !known.has(e.id));
+      last.forEach(e => known.add(e.id));
+      if (!first && !silent && fresh.length) {
+        alertBeep();                              /* desktop: two beeps; phone: vibrate */
+        if (badge) { badge.classList.remove('alert-pulse'); void badge.offsetWidth; badge.classList.add('alert-pulse'); }
+        if (!panel.classList.contains('hidden')) render();
+      }
+      first = false;
+    } catch (e) { /* toast shown by API */ }
+  }
+  poll(true);
+  setInterval(poll, 20000);
+}
+
+/* --------------------------------------- PWA: install, push, taskbar badge --- */
+/* HTTPS-only territory: service workers, badges and Web Push stay silently
+   inactive on plain-HTTP origins until the console moves to an HTTPS address. */
+let kivuDeferredInstall = null;
+function isStandalone() {
+  try { return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; }
+  catch (e) { return false; }
+}
+function initPWA(bar) {
+  const secure = window.isSecureContext && 'serviceWorker' in navigator;
+  if (secure) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+    window.addEventListener('beforeinstallprompt', e => {
+      e.preventDefault();
+      kivuDeferredInstall = e;
+      const ib = document.getElementById('installAppBtn');
+      if (ib && !isStandalone()) ib.classList.remove('hidden');
+    });
+  }
+  if (isStandalone()) return;
+  const ib = el('button', { class: 'btn sm ghost hidden', id: 'installAppBtn', type: 'button', text: 'Install' });
+  ib.addEventListener('click', async () => {
+    if (kivuDeferredInstall) {
+      kivuDeferredInstall.prompt();
+      kivuDeferredInstall = null;
+      ib.classList.add('hidden');
+    } else {
+      toast('Install: open the browser menu and choose "Install app / Add to Home screen"', 'warn');
+    }
+  });
+  bar.appendChild(ib);
+}
+async function pushState() {
+  if (!(window.isSecureContext && 'serviceWorker' in navigator) || !('PushManager' in window)) return null;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    return await reg.pushManager.getSubscription();
+  } catch (e) { return null; }
+}
+async function pushEnable() {
+  const v = await API.get('/api/push/vapid');
+  if (!v || !v.publicKey) throw new Error('Web push is not configured yet');
+  const perm = typeof Notification !== 'undefined' ? await Notification.requestPermission() : 'denied';
+  if (perm !== 'granted') throw new Error('Notifications are blocked in the browser settings');
+  const reg = await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: v.publicKey });
+  await API.post('/api/push/subscribe', { endpoint: sub.endpoint, keys: (sub.toJSON() || {}).keys || {} });
+  return sub;
+}
+async function pushDisable() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) { await API.post('/api/push/unsubscribe', { endpoint: sub.endpoint }); await sub.unsubscribe(); }
+  } catch (e) { /* best effort */ }
+}
+function applyAppBadge(n) {
+  const count = Number(n) || 0;
+  try {
+    if (navigator.setAppBadge) navigator.setAppBadge(count);
+    else if (!count && navigator.clearAppBadge) navigator.clearAppBadge();
+  } catch (e) { /* unsupported browser */ }
+  try { document.title = count ? '(' + count + ') KIVU Tracker' : 'KIVU Tracker'; } catch (e) {}
+}
+function wireAlertFoot(panel) {
+  const foot = panel.querySelector('#alertFoot');
+  if (!foot) return;
+  const capable = window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window
+    && typeof Notification !== 'undefined';
+  if (!capable) {
+    foot.innerHTML = '<span class="muted" style="display:block;padding:8px 14px">Phone push needs the HTTPS address.</span>';
+    return;
+  }
+  const btn = el('button', { class: 'btn sm ghost', type: 'button', id: 'pushBtn', text: 'Enable phone alerts' });
+  btn.style.margin = '8px 14px';
+  foot.appendChild(btn);
+  pushState().then(sub => { if (sub) btn.textContent = 'Phone alerts: ON - tap to turn off'; }).catch(() => {});
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    try {
+      const sub = await pushState();
+      if (sub) { await pushDisable(); btn.textContent = 'Enable phone alerts'; toast('Phone alerts turned off'); }
+      else {
+        await pushEnable();
+        btn.textContent = 'Phone alerts: ON - tap to turn off';
+        toast('Phone alerts enabled - you will be notified even when the app is closed');
+      }
+    } catch (e) { toast((e && e.message) || 'Could not enable phone alerts', 'error'); }
+    btn.disabled = false;
+  });
+}
+

@@ -581,7 +581,7 @@ function editGeofence(id, preset) {
   };
   const m = modal({
     title: id ? 'Geofence — ' + values.name : 'New geofence',
-    body: body, wide: true,
+    body: body, wide: true, passThrough: true,
     buttons: [
       { label: 'Cancel', class: 'ghost' },
       { label: 'Save geofence', class: 'primary', onClick: async () => {
@@ -682,6 +682,7 @@ function editNotification(id) {
     { value: 'idle', label: 'Long idling' }, { value: 'sos', label: 'SOS / panic' },
     { value: 'fuel_drop', label: 'Fuel drop (theft)' }, { value: 'fuel_fill', label: 'Refuelling' },
     { value: 'power_cut', label: 'Power cut' }, { value: 'offline', label: 'No data (offline)' },
+    { value: 'harsh', label: 'Harsh driving' },
     { value: 'maintenance', label: 'Service interval due' }], n.type || 'speed'), null, body);
   const speedInput = notifField('Speed limit (km/h)',
     el('input', { type: 'number', name: 'speed_limit', min: 1 }), null, body);

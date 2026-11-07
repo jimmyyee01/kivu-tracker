@@ -150,7 +150,8 @@ function h_units_save($user, $p): array {
             . implode(',', array_fill(0, count($cols), '?')) . ')')->execute(array_values($fields));
         /* default sensors every new tracker gets */
         $defaults = [['Fuel level', 'fuel_level', 'fuel', 'L'], ['Ignition', 'ignition', 'ign', ''],
-            ['Power voltage', 'voltage', 'pwr', 'V'], ['Temperature', 'temperature', 'temp', 'C']];
+            ['Power voltage', 'voltage', 'pwr', 'V'], ['Temperature', 'temperature', 'temp', 'C'],
+            ['Weight', 'weight', 'weight', 'kg']];
         $ins = db()->prepare('INSERT INTO sensors (id,unit_id,account_id,name,type,param,units,coefficient,offset_val,enabled,created_at)
                               VALUES (?,?,?,?,?,?,?,1,0,1,?)');
         foreach ($defaults as $sd) $ins->execute([uid('sns'), $id, $account, $sd[0], $sd[1], $sd[2], $sd[3], now_dt()]);
@@ -220,7 +221,7 @@ function h_unit_messages($user, $p): array {
     need(unit_allowed($user, $id), 'You do not have access to this unit', 403);
     need($unit['account_id'] === scope_account($user) || is_super($user), 'Unit not found', 404);
     $limit = min(20000, max(1, (int)qp('limit', 5000)));
-    $sql = 'SELECT ts,lat,lon,speed,course,alt,sats,hdop,ignition,fuel,voltage,params_json,valid,source
+    $sql = 'SELECT ts,lat,lon,speed,course,alt,sats,hdop,ignition,fuel,voltage,battery,weight,params_json,valid,source
             FROM messages WHERE unit_id = ?';
     $prm = [$id];
     if (qp('from')) { $sql .= ' AND ts >= ?'; $prm[] = dt_param(qp('from')); }
@@ -237,6 +238,8 @@ function h_unit_messages($user, $p): array {
             'ignition' => $m['ignition'] === null ? null : (int)$m['ignition'],
             'fuel' => $m['fuel'] === null ? null : (float)$m['fuel'],
             'voltage' => $m['voltage'] === null ? null : (float)$m['voltage'],
+            'battery' => $m['battery'] === null ? null : (int)$m['battery'],
+            'weight' => $m['weight'] === null ? null : (float)$m['weight'],
             'valid' => (int)$m['valid'], 'source' => $m['source'],
             'params' => jdec($m['params_json'] ?? null, [])];
     }
@@ -546,7 +549,7 @@ function h_maintenance_delete($user, $p): array {
 /* ---------------------------------------------------------------- events */
 function h_events_list($user, $p): array {
     $accountId = scope_account($user);
-    $sql = 'SELECT e.*, u.name AS unit_name FROM events e LEFT JOIN units u ON u.id = e.unit_id WHERE 1=1';
+    $sql = 'SELECT e.*, u.name AS unit_name, d.name AS driver_name, a.name AS account_name FROM events e LEFT JOIN units u ON u.id = e.unit_id LEFT JOIN drivers d ON d.id = u.driver_id LEFT JOIN accounts a ON a.id = e.account_id WHERE 1=1';
     $prm = [];
     if ($accountId) { $sql .= ' AND e.account_id = ?'; $prm[] = $accountId; }
     if (qp('unit_id')) { $sql .= ' AND e.unit_id = ?'; $prm[] = qp('unit_id'); }
@@ -563,6 +566,8 @@ function h_events_list($user, $p): array {
     $st->execute($prm);
     $rows = array_map(fn($e) => ['id' => (int)$e['id'], 'ts' => iso($e['ts']), 'type' => $e['type'],
         'severity' => $e['severity'], 'text' => $e['text'], 'unit' => $e['unit_name'], 'unit_id' => $e['unit_id'],
+        'driver' => (string)($e['driver_name'] ?? ''),
+        'account' => (string)($e['account_name'] ?? ''),
         'lat' => $e['lat'] === null ? null : (float)$e['lat'], 'lon' => $e['lon'] === null ? null : (float)$e['lon'],
         'speed' => $e['speed'] === null ? null : (float)$e['speed'], 'acknowledged' => (int)$e['acknowledged'],
         'address' => address_of($e['lat'], $e['lon']), 'extra' => jdec($e['extra_json'] ?? null, [])], $st->fetchAll());
@@ -623,8 +628,13 @@ function h_device_sessions($user, $p): array {
     $sql .= ' ORDER BY s.id DESC LIMIT ' . min(500, max(1, (int)qp('limit', 100)));
     $st = db()->prepare($sql);
     $st->execute($prm);
+    /* "Online" = connected AND recently heard: sessions fed by the bridge never
+       receive an explicit logout, so age the flag by last packet time too. */
+    $onT = max(300, (int)setting('online_timeout_s', 300));
     return ['sessions' => array_map(fn($s) => ['id' => (int)$s['id'], 'unit_id' => $s['unit_id'],
         'unit' => $s['unit_name'], 'unique_id' => $s['unique_id'], 'protocol' => $s['protocol'],
         'login_ts' => iso($s['login_ts']), 'last_ts' => iso($s['last_ts']), 'logout_ts' => iso($s['logout_ts']),
-        'packets' => (int)$s['packets'], 'ip' => $s['ip'], 'online' => $s['logout_ts'] === null], $st->fetchAll())];
+        'packets' => (int)$s['packets'], 'ip' => $s['ip'],
+        'online' => $s['logout_ts'] === null && $s['last_ts'] !== null
+            && (time() - (int)strtotime((string)$s['last_ts'])) <= $onT], $st->fetchAll())];
 }

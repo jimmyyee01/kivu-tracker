@@ -44,11 +44,29 @@ if ($path !== '' && (strpos($path, 'css/') === 0 || strpos($path, 'js/') === 0 |
     }
 }
 
+/* CMS: the front page, platform pages and account pages (/p/<account>/<slug>)
+   are rendered server-side by php/cms.php. With no front page published "/"
+   redirects to /login (the console opens first); the marketing page is /welcome. */
+if ($path === '' || preg_match('#^p/[a-z0-9\-]{1,64}(/[a-z0-9\-]{1,64})?$#', $path)) {
+    $parts = explode('/', $path);
+    $_GET['slug'] = $path === '' ? 'home' : (isset($parts[2]) ? $parts[2] : $parts[1]);
+    if (isset($parts[2])) $_GET['account'] = $parts[1];
+    require $root . '/php/cms.php';
+    return true;
+}
+/* the content manager shell — refused for the mobile app */
+if ($path === 'cms') {
+    require $root . '/php/cms-manager.php';
+    return true;
+}
+
 /* pretty pages */
-$pages = ['' => 'index.html', 'login' => 'login.html', 'app' => 'app.html', 'admin' => 'admin.html',
-    'reports' => 'reports.html', 'super' => 'super.html', 'track' => 'track.html', 'index.html' => 'index.html',
+$pages = ['login' => 'login.html', 'app' => 'app.html', 'admin' => 'admin.html',
+    'reports' => 'reports.html', 'super' => 'super.html', 'track' => 'track.html',
+    'welcome' => 'index.html', 'index.html' => 'index.html',
     'register' => 'register.html', 'signup' => 'register.html', 'billing' => 'billing.html',
-    'reseller' => 'reseller.html', 'pay' => 'pay.html', 'download' => 'download.html'];
+    'reseller' => 'reseller.html', 'pay' => 'pay.html', 'download' => 'download.html',
+    'manual' => 'manual.html'];
 if (isset($pages[$path])) {
     header('Content-Type: text/html; charset=utf-8');
     header('Cache-Control: no-store');

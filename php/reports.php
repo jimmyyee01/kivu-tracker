@@ -25,6 +25,8 @@ function report_types(): array {
          'hint' => 'Episodes above the unit speed limit.'],
         ['id' => 'fuel', 'name' => 'Fuel fillings & drainings', 'group' => 'Fuel',
          'hint' => 'Refuelling and theft detection from the fuel level sensor.'],
+        ['id' => 'weight', 'name' => 'Weight / load', 'group' => 'Sensors',
+         'hint' => 'Min / avg / max weight per unit from the weight sensor.'],
         ['id' => 'engine_hours', 'name' => 'Engine hours & idling', 'group' => 'Fuel',
          'hint' => 'Engine run time, idle time and fuel burnt while idling.'],
         ['id' => 'mileage', 'name' => 'Mileage by day', 'group' => 'General',
@@ -84,6 +86,7 @@ function report_run(string $type, array $p, ?array $user = null): array {
         case 'events':     return report_events($out, $units, $unitIds, $from, $to, $p);
         case 'speed_violations': return report_speeding($out, $units, $unitIds, $from, $to, $p);
         case 'fuel':       return report_fuel($out, $units, $unitIds, $from, $to, $p);
+        case 'weight':     return report_weight($out, $units, $unitIds, $from, $to, $p);
         case 'engine_hours': return report_engine_hours($out, $units, $unitIds, $from, $to);
         case 'mileage':    return report_mileage($out, $units, $unitIds, $from, $to);
         case 'drivers_by_unit': return report_drivers($out, $units, $unitIds, $from, $to);
@@ -429,6 +432,45 @@ function report_fuel(array $o, array $units, array $unitIds, $from, $to, array $
         'series' => [
             ['name' => 'filled', 'data' => array_map(fn($l) => round($fillByUnit[$l] ?? 0, 1), $labels)],
             ['name' => 'drained', 'data' => array_map(fn($l) => round($drainByUnit[$l] ?? 0, 1), $labels)],
+        ]];
+    return $o;
+}
+
+/* Weight sensor statistics per unit (kg). */
+function report_weight(array $o, array $units, array $unitIds, $from, $to, array $p): array {
+    $rows = []; $labels = [];
+    $sum = 0.0; $n = 0; $min = null; $max = null;
+    foreach ($units as $u) {
+        $st = db()->prepare('SELECT MIN(weight) mn, MAX(weight) mx, AVG(weight) av, COUNT(weight) n
+            FROM messages WHERE unit_id = ? AND weight IS NOT NULL AND ts >= ? AND ts <= ?');
+        $st->execute([$u['id'], $from, $to]);
+        $r = $st->fetch();
+        if (!$r || !(int)$r['n']) continue;
+        $rows[] = ['unit' => $u['name'], 'readings' => (int)$r['n'],
+            'avg' => round((float)$r['av'], 1), 'min' => round((float)$r['mn'], 1),
+            'max' => round((float)$r['mx'], 1)];
+        $labels[] = $u['name'];
+        $sum += (float)$r['av'] * (int)$r['n']; $n += (int)$r['n'];
+        $min = $min === null ? (float)$r['mn'] : min($min, (float)$r['mn']);
+        $max = $max === null ? (float)$r['mx'] : max($max, (float)$r['mx']);
+    }
+    $o['summary'] = [
+        ['label' => 'Units with data', 'value' => count($rows)],
+        ['label' => 'Readings', 'value' => $n],
+        ['label' => 'Average', 'value' => $n > 0 ? round($sum / $n, 1) . ' kg' : '-'],
+        ['label' => 'Minimum', 'value' => $min !== null ? round($min, 1) . ' kg' : '-'],
+        ['label' => 'Maximum', 'value' => $max !== null ? round($max, 1) . ' kg' : '-'],
+    ];
+    $o['tables'][] = ['id' => 'weight', 'title' => 'Weight per unit (kg)',
+        'columns' => [col('unit', 'Unit'), col('readings', 'Readings'), col('avg', 'Avg kg'),
+            col('min', 'Min kg'), col('max', 'Max kg')],
+        'totals' => ['readings' => $n], 'rows' => $rows];
+    $o['charts'][] = ['id' => 'weight_chart', 'title' => 'Weight avg / min / max (kg)', 'type' => 'bar',
+        'labels' => $labels,
+        'series' => [
+            ['name' => 'avg', 'data' => array_map(fn($x) => $x['avg'], $rows)],
+            ['name' => 'min', 'data' => array_map(fn($x) => $x['min'], $rows)],
+            ['name' => 'max', 'data' => array_map(fn($x) => $x['max'], $rows)],
         ]];
     return $o;
 }

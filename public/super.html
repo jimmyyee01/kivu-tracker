@@ -12,6 +12,7 @@
 <div style="max-width:1300px;margin:0 auto;padding:14px">
   <div class="tabs" id="superTabs">
     <div class="tab active" data-pane="paneAccounts">Accounts</div>
+    <div class="tab" data-pane="paneModules">Business Models</div>
     <div class="tab" data-pane="paneBilling">Plans &amp; billing</div>
     <div class="tab" data-pane="paneReports">Financial reports</div>
     <div class="tab" data-pane="paneSettings">Platform settings</div>
@@ -26,6 +27,22 @@
       </div>
       <div id="accountsTable"></div>
       <div id="accountDetail" style="margin-top:16px"></div>
+    </div>
+
+    <div class="tabpane" id="paneModules">
+      <div class="card pad" style="margin-bottom:14px">
+        <div class="row wrap">
+          <h2 style="margin:0">Business Models &amp; Verticals</h2>
+          <span class="spacer" style="flex:1"></span>
+          <button class="btn sm" id="btnReloadModules">Refresh</button>
+          <button class="btn primary sm" id="btnNewModule">+ New business model</button>
+        </div>
+        <p class="hint" style="margin-top:8px">Each module is a vertical (telematics, agriculture, health, or custom).
+          Configure its slug, logo, theme colors, and publish dynamic landing pages/navigation — no code changes required.
+          Path routing: <span class="mono">/{slug}</span> and <span class="mono">/{slug}/p/{page}</span>.</p>
+      </div>
+      <div id="modulesTable"></div>
+      <div id="moduleDetail" style="margin-top:16px"></div>
     </div>
 
     <div class="tabpane" id="paneBilling">

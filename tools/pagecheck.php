@@ -12,7 +12,7 @@ declare(strict_types=1);
 
 if (PHP_SAPI !== 'cli') { http_response_code(403); exit('CLI only'); }
 $root = dirname(__DIR__) . '/public/';
-$pages = ['index.html', 'login.html', 'app.html', 'admin.html', 'reports.html', 'super.html', 'track.html'];
+$pages = ['index.html', 'login.html', 'app.html', 'admin.html', 'reports.html', 'super.html', 'track.html', 'cms.html'];
 $problems = 0;
 
 foreach ($pages as $page) {

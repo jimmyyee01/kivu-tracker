@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Website content — KIVU Tracker</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div id="topbar"></div>
+
+<div id="cmsWrap" style="max-width:1320px;margin:0 auto;padding:14px">
+  <div class="card pad" style="margin-bottom:14px">
+    <div class="row wrap" style="align-items:center">
+      <h2 style="margin:0">Website content</h2>
+      <span class="spacer" style="flex:1"></span>
+      <select id="scopeAccount" title="Account" style="width:auto;max-width:230px"></select>
+      <select id="scopeType" title="Page type" style="width:auto;max-width:180px"></select>
+      <select id="scopeAsset" title="Asset type" style="width:auto;max-width:180px"></select>
+      <button class="btn primary sm" id="btnNewPage">+ New page</button>
+      <button class="btn sm" id="btnSeed">Load starter page</button>
+      <button class="btn sm" id="btnExport">Export JSON</button>
+      <button class="btn sm" id="btnImport">Import JSON</button>
+    </div>
+    <p class="hint" id="cmsHint" style="margin:8px 0 0">
+      Pages are rendered server-side: the platform site at <span class="mono">/p/&lt;slug&gt;</span> and
+      <span class="mono">/</span> for the front page, an account's content at
+      <span class="mono">/p/&lt;account&gt;/&lt;slug&gt;</span> and <span class="mono">/p/&lt;account&gt;</span>
+      for its landing page. Every page has a <b>type</b> (landing, help, terms, faq, custom) and an
+      optional <b>asset type</b>; an account's help/terms pages are linked in that account's console.
+      The content manager is a desktop console — it is not part of the mobile app.
+    </p>
+  </div>
+
+  <div class="cms-layout">
+    <aside class="card pad">
+      <h3 style="margin-top:0">Pages <span class="chip info" id="pageCount">0</span></h3>
+      <div id="pageList"></div>
+    </aside>
+
+    <section class="card pad" id="editorPane">
+      <div id="pageForm"></div>
+      <div class="row wrap" style="margin:12px 0 6px">
+        <button class="btn primary sm" id="btnSavePage">Save page</button>
+        <button class="btn sm" id="btnPreview">Preview</button>
+        <button class="btn sm danger" id="btnDeletePage">Delete page</button>
+      </div>
+
+      <h3 style="margin-top:18px">Blocks</h3>
+      <p class="hint" id="blocksHint">Blocks render top to bottom. Consecutive feature cards and
+        buttons are grouped automatically.</p>
+      <div id="blockList"></div>
+      <div class="row wrap" style="margin-top:10px">
+        <select id="newBlockKind" style="width:auto;max-width:240px"></select>
+        <button class="btn primary sm" id="btnAddBlock">+ Add block</button>
+      </div>
+      <div id="cmsLog"></div>
+    </section>
+  </div>
+</div>
+
+<script src="/js/common.js"></script>
+<script src="/js/cms.js"></script>
+</body>
+</html>

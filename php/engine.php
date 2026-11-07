@@ -113,10 +113,13 @@ function nearest_place(float $lat, float $lon, float $maxKm = 12.0): ?array {
     }
     return $best;
 }
-/* Human-readable location without any external API. */
+/* Human-readable location: user Places first (exact, offline), then a cached
+   OpenStreetMap Nominatim reverse lookup (max 1 request/second, 11 m grid),
+   then raw coordinates as the last resort. */
 function address_of($lat, $lon): string {
     if ($lat === null || $lon === null) return '';
     $lat = (float)$lat; $lon = (float)$lon;
+    if ($lat == 0.0 && $lon == 0.0) return '';
     $p = nearest_place($lat, $lon);
     if ($p) {
         $d = (float)$p['distance_km'];
@@ -124,7 +127,57 @@ function address_of($lat, $lon): string {
         if ($d < 0.35) return (string)$p['name'] . ($suffix ? ', ' . $suffix : '');
         return sprintf('%s (+%.1f km)%s', $p['name'], $d, $suffix ? ', ' . $suffix : '');
     }
+    $name = geo_reverse_cached($lat, $lon);
+    if ($name !== '') return $name;
     return sprintf('%.5f, %.5f', $lat, $lon);
+}
+/* Reverse geocode with a DB cache. Named results are kept forever, misses are
+   retried after a day; one outbound call per 1.1 s at most, and never more
+   than once per request per 11 m grid cell. */
+function geo_reverse_cached($lat, $lon): string {
+    static $memo = [];
+    $cell = number_format((float)$lat, 4, '.', '') . ',' . number_format((float)$lon, 4, '.', '');
+    if (isset($memo[$cell])) return $memo[$cell];
+    try {
+        geo_cache_table();
+        $st = db()->prepare('SELECT name, ts FROM geo_cache WHERE cell = ?');
+        $st->execute([$cell]);
+        $row = $st->fetch();
+        if ($row && ((string)$row['name'] !== '' || strtotime((string)$row['ts']) > time() - 86400)) {
+            return $memo[$cell] = (string)$row['name'];
+        }
+        static $lastCall = 0.0;
+        if (microtime(true) - $lastCall < 1.1) return $memo[$cell] = '';   /* stay polite */
+        $lastCall = microtime(true);
+        $url = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=16&accept-language=en'
+             . '&lat=' . rawurlencode((string)$lat) . '&lon=' . rawurlencode((string)$lon);
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 4,
+            CURLOPT_USERAGENT => 'KIVU-Tracker/1.0 (fleet monitoring console)',
+        ]);
+        $body = (string)curl_exec($ch);
+        curl_close($ch);
+        $name = '';
+        if ($body !== '') {
+            $j = jdec($body, []);
+            $name = trim((string)($j['display_name'] ?? ''));
+            if ($name !== '') $name = implode(', ', array_slice(explode(', ', $name), 0, 3));
+        }
+        db()->prepare('INSERT INTO geo_cache (cell, name, ts) VALUES (?,?,NOW())'
+            . ' ON DUPLICATE KEY UPDATE name = VALUES(name), ts = VALUES(ts)')
+            ->execute([$cell, $name]);
+        return $memo[$cell] = $name;
+    } catch (Throwable $e) {
+        return $memo[$cell] = '';
+    }
+}
+function geo_cache_table(): void {
+    static $done = false;
+    if ($done) return;
+    db()->exec('CREATE TABLE IF NOT EXISTS geo_cache (cell VARCHAR(24) NOT NULL PRIMARY KEY,'
+        . ' name VARCHAR(255) NOT NULL, ts DATETIME NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+    $done = true;
 }
 
 /* ---------------------------------------------------------------- units -- */
@@ -138,7 +191,10 @@ function unit_defaults(): array {
    The value only greys out bad fixes (valid = 0) — nothing is ever deleted. */
 function max_teleport_km(): float { return 500.0; }
 function unit_by_id(string $id): array {
-    $st = db()->prepare('SELECT * FROM units WHERE id = ?');
+    /* JOINed so the detail endpoint carries driver/group names too — without
+       them the details panel overwrites the list values with nulls. */
+    $st = db()->prepare('SELECT u.*, g.name AS group_name, d.name AS driver_name FROM units u'
+        . ' LEFT JOIN unit_groups g ON g.id = u.group_id LEFT JOIN drivers d ON d.id = u.driver_id WHERE u.id = ?');
     $st->execute([$id]);
     $u = $st->fetch();
     need($u, 'Unit not found', 404);
@@ -153,7 +209,9 @@ function unit_state(array $u): array {
     if ($age === null) return ['status' => 'never', 'age_s' => null, 'color' => '#8b93a7', 'label' => 'No data'];
     if ($age > $timeout) return ['status' => 'offline', 'age_s' => $age, 'color' => '#7d8598', 'label' => 'Offline'];
     if ((int)$u['moving'] === 1 && $speed > $movingSpeed) return ['status' => 'moving', 'age_s' => $age, 'color' => '#2ecc71', 'label' => 'Moving'];
-    if ($u['last_ignition'] === null || (int)$u['last_ignition'] === 1) {
+    /* idle only when the device CONFIRMS ignition on; unknown (null) ignition
+       on a standing unit is 'parked', not 'engine on' */
+    if ($u['last_ignition'] !== null && (int)$u['last_ignition'] === 1) {
         return ['status' => 'idle', 'age_s' => $age, 'color' => '#f1c40f', 'label' => 'Idle (engine on)'];
     }
     return ['status' => 'parked', 'age_s' => $age, 'color' => '#2f9cf4', 'label' => 'Parked'];
@@ -176,6 +234,8 @@ function unit_live_shape(array $u): array {
         'ignition' => $u['last_ignition'] === null ? null : (int)$u['last_ignition'],
         'fuel' => $u['last_fuel'] === null ? null : (float)$u['last_fuel'],
         'voltage' => $u['last_voltage'] === null ? null : (float)$u['last_voltage'],
+        'battery' => isset($u['last_battery']) && $u['last_battery'] !== null ? (int)$u['last_battery'] : null,
+        'weight' => isset($u['last_weight']) && $u['last_weight'] !== null ? (float)$u['last_weight'] : null,
         'altitude' => $u['last_alt'] === null ? null : (float)$u['last_alt'],
         'mileage' => (float)$u['odometer_km'], 'engine_hours' => (float)$u['engine_hours'],
         'last_time' => iso($u['last_time']), 'status' => $st['status'], 'status_label' => $st['label'],

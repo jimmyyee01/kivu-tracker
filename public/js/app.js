@@ -9,17 +9,24 @@ const App = {
   map: null,
   units: [],
   selected: null,
-  follow: true,
+  follow: false,
+  autoFit: true,
   showFences: true,
   timer: null,
   liveEvery: 15,
   track: { points: [], playing: false, idx: 0, raf: null },
-  range: null
+  range: null,
+  _fitted: false,      /* the fleet has been framed at least once */
+  _fitKey: '',         /* which units the last framing was for */
+  _userMovedAt: 0      /* last time the operator panned/zoomed by hand */
 };
 
 document.addEventListener('DOMContentLoaded', async function () {
   const meta = await boot('app');
   if (!meta) return;
+  /* operator choices survive a reload; both default to the fleet view */
+  App.follow = store.get('follow', false) === true;
+  App.autoFit = store.get('autoFit', true) !== false;
 
   App.map = MapCore.create($('#map'), {
     lat: meta.defaults.lat, lon: meta.defaults.lon, zoom: meta.defaults.zoom, tiles: meta.map_tiles
@@ -28,17 +35,38 @@ document.addEventListener('DOMContentLoaded', async function () {
   applyMapStyle(App.map);
   const toolbar = document.querySelector('.map-toolbar');
   if (toolbar && $('#btnFitAll')) {
-    toolbar.appendChild(mapStyleSelect(url => {
-      if (App.map && typeof App.map.setTiles === 'function') App.map.setTiles(url);
+    toolbar.appendChild(mapStyleSelect((url, style) => {
+      if (App.map && typeof App.map.setTiles === 'function') {
+        App.map.setTiles(url, { maxZoom: (style && style.maxZoom) || 19 });
+      }
     }));
   }
   $('#mapBackend').textContent = 'map: ' + App.map.backend;
+  /* keep the map sized to its container everywhere (panel collapse, mobile fill) */
+  try {
+    if (window.ResizeObserver && document.querySelector('.map-wrap')) {
+      let _mr;
+      new ResizeObserver(() => {
+        clearTimeout(_mr);
+        _mr = setTimeout(() => { try { App.map.invalidateSize(); } catch (e) {} }, 150);
+      }).observe(document.querySelector('.map-wrap'));
+    }
+  } catch (e) {} /* kivu-map-observer */
+  /* a hand-driven pan/zoom pauses auto-fit for a moment so the map never
+     fights the operator (selecting a unit counts, see App.selectUnit) */
+  const mapWrap = document.querySelector('.map-wrap');
+  if (mapWrap) {
+    ['mousedown', 'touchstart', 'wheel', 'dblclick'].forEach(ev =>
+      mapWrap.addEventListener(ev, () => { App._userMovedAt = Date.now(); }, { passive: true }));
+  }
   App.map.on('click', p => {
     $('#mapStatus').innerHTML = '<b>Coordinates</b> ' + p.lat.toFixed(6) + ', ' + p.lon.toFixed(6);
   });
 
   initTabs($('.inspector'));
   initToolbar();
+  initSidePanel();
+  initInspectorPanel();
   buildInfoPane();
   buildTrackPane();
   buildTripsPane();
@@ -69,6 +97,7 @@ App.refresh = async function () {
     });
     $('#unitCount').textContent = units.length;
     App.map.setUnits(units.filter(u => u.lat !== null), u => App.selectUnit(u));
+    autoFitToFleet(units);
     if (App.showFences) App.drawFences();
     renderFleetStats(units);
     if (sel) {
@@ -83,10 +112,34 @@ App.refresh = async function () {
   } catch (e) { /* toast already shown */ }
 };
 
+/* Default autoscaling — keep the whole fleet in view.
+   The first fleet that has positions is always framed; afterwards only when
+   the fleet itself changed (a unit added/removed) or a unit drifted out of
+   the viewport. It never runs while following one unit, playing a track, or
+   for 20 s after the operator pans, zooms or picks a unit. */
+function autoFitToFleet(units) {
+  if (!App.autoFit || App.follow || !App.map) return;
+  if (App.track && App.track.points && App.track.points.length) return;
+  if (Date.now() - (App._userMovedAt || 0) < 20000) return;
+  const pts = units.filter(u => u.lat !== null && u.lon !== null)
+    .map(u => ({ lat: u.lat, lon: u.lon }));
+  if (!pts.length) return;
+  const key = units.map(u => u.id).sort().join(',');
+  const changed = key !== App._fitKey;
+  const outside = typeof App.map.containsAll === 'function' ? !App.map.containsAll(pts) : false;
+  if (!App._fitted || changed || outside) {
+    App.map.fitPoints(pts);
+    App._fitted = true;
+    App._fitKey = key;
+  }
+}
+
 App.selectUnit = function (u) {
   App.selected = u;
   State.selectedUnit = u.id;
   store.set('selectedUnit', u.id);
+  /* framing one unit is deliberate: keep auto-fit out of the way for a bit */
+  App._userMovedAt = Date.now();
   $$('#unitTree .node').forEach(n => n.classList.toggle('active', n.dataset.unit === String(u.id)));
   $('#inspectorTitle').textContent = u.name;
   renderInspectorStatus(u);
@@ -102,9 +155,23 @@ App.selectUnit = function (u) {
 function renderFleetStats(units) {
   const counts = { moving: 0, idle: 0, parked: 0, offline: 0, never: 0 };
   units.forEach(u => { counts[u.status] = (counts[u.status] || 0) + 1; });
-  $('#fleetStats').innerHTML = Object.keys(counts).map(k =>
+  const html = Object.keys(counts).map(k =>
     '<span class="chip" style="margin:1px">' + '<span class="dot" style="background:' + STATUS[k].color + '"></span> '
     + counts[k] + ' ' + h(STATUS[k].label.split(' ')[0]) + '</span>').join('');
+  $('#fleetStats').innerHTML = html;
+  /* mobile: mirror the stats onto the map so parked/moving/idle/offline
+     stay visible without opening the units panel */
+  let mf = document.getElementById('mapFleet');
+  if (!mf) {
+    const wrap = document.querySelector('.map-wrap');
+    if (wrap) {
+      mf = document.createElement('div');
+      mf.id = 'mapFleet';
+      mf.className = 'map-fleet';
+      wrap.appendChild(mf);
+    }
+  }
+  if (mf) mf.innerHTML = html;
 }
 function renderInspectorStatus(u) {
   const st = STATUS[u.status] || STATUS.never;
@@ -123,14 +190,40 @@ function initToolbar() {
   $('#unitSearch').addEventListener('input', debounce(() => App.refresh(), 300));
   $('#statusFilter').addEventListener('change', () => App.refresh());
   $('#refreshBtn').addEventListener('click', () => App.refresh());
-  $('#btnFitAll').addEventListener('click', () => {
+  const fitAll = () => {
     const pts = App.units.filter(u => u.lat !== null).map(u => ({ lat: u.lat, lon: u.lon }));
-    if (pts.length) App.map.fitPoints(pts);
-  });
-  $('#btnFollow').addEventListener('click', () => {
+    if (!pts.length) return;
+    App.map.fitPoints(pts);
+    App._fitted = true;
+    App._fitKey = App.units.map(u => u.id).sort().join(',');
+    App._userMovedAt = 0;            /* an explicit "fit all" wins */
+  };
+  $('#btnFitAll').addEventListener('click', fitAll);
+  /* default autoscaling switch: on = the map keeps every unit in view */
+  const autoBtn = $('#btnAutoFit');
+  const paintAutoFit = () => {
+    if (!autoBtn) return;
+    autoBtn.textContent = 'Auto-fit: ' + (App.autoFit ? 'on' : 'off');
+    autoBtn.classList.toggle('active', App.autoFit);
+  };
+  paintAutoFit();
+  if (autoBtn) {
+    autoBtn.addEventListener('click', () => {
+      App.autoFit = !App.autoFit;
+      store.set('autoFit', App.autoFit);
+      paintAutoFit();
+      if (App.autoFit) { App._fitted = false; App._userMovedAt = 0; fitAll(); }
+    });
+  }
+  const followBtn = $('#btnFollow');
+  followBtn.textContent = 'Follow: ' + (App.follow ? 'on' : 'off');
+  followBtn.classList.toggle('active', App.follow);
+  followBtn.addEventListener('click', () => {
     App.follow = !App.follow;
-    $('#btnFollow').textContent = 'Follow: ' + (App.follow ? 'on' : 'off');
-    $('#btnFollow').classList.toggle('active', App.follow);
+    store.set('follow', App.follow);
+    followBtn.textContent = 'Follow: ' + (App.follow ? 'on' : 'off');
+    followBtn.classList.toggle('active', App.follow);
+    if (App.follow) { App._fitted = false; App.refresh(); }
   });
   $('#btnTrack').addEventListener('click', () => {
     if (App.track.points.length) App.clearTrack(); else App.loadTrack();
@@ -173,6 +266,8 @@ async function renderInfoPane(unit) {
     ['Satellites', u.sats === null || u.sats === undefined ? '—' : u.sats],
     ['Fuel level', u.fuel === null || u.fuel === undefined ? '—' : fmt.liters(u.fuel)],
     ['Board voltage', u.voltage === null || u.voltage === undefined ? '—' : fmt.num(u.voltage, 1) + ' V'],
+    ['Battery', u.battery === null || u.battery === undefined ? '—' : Math.round(u.battery) + '%'],
+    ['Weight', u.weight === null || u.weight === undefined ? '—' : fmt.num(u.weight, 1) + ' kg'],
     ['Altitude', u.altitude === null || u.altitude === undefined ? '—' : fmt.num(u.altitude, 0) + ' m'],
     ['Location', h(u.address || '')],
     ['Coordinates', u.lat === null || u.lat === undefined ? '—' : Number(u.lat).toFixed(6) + ', ' + Number(u.lon).toFixed(6)],
@@ -189,11 +284,24 @@ async function renderInfoPane(unit) {
     ['Fuel rate', u.fuel_rate ? u.fuel_rate + ' L/100 km' : '—'],
     ['Last packet from', '<span class="mono">' + h(u.last_ip || '—') + '</span>']
   ];
-  let html = kv(rows);
+  /* device-telemetry rows appear only when the device reports them — phones have
+     no fuel tank/board voltage, cars have no battery % — no dead dashes */
+  const telemetryRows = ['Ignition', 'Satellites', 'Fuel level', 'Board voltage', 'Battery', 'Fuel rate', 'Weight'];
+  let html = kv(rows.filter(r => !(telemetryRows.includes(r[0]) && r[1] === '—')));
   if ((data.sensors || []).length) {
-    html += '<h3 style="margin-top:14px">Sensors</h3>' + kv(data.sensors.map(s =>
-      [s.name, '<span class="mono">' + h(s.param) + '</span>'
-        + (s.units ? ' <span class="dim">(' + h(s.units) + ')</span>' : '') + ' &times;' + h(s.coefficient)]));
+    /* show the LIVE value for the params this platform decodes, config alongside */
+    const liveParam = { fuel_level: u.fuel, voltage: u.voltage, ignition: u.ignition,
+      weight: u.weight, battery: u.battery };
+    html += '<h3 style="margin-top:14px">Sensors</h3>' + kv(data.sensors.map(s => {
+      const v = liveParam[s.param];
+      const live = v === null || v === undefined ? '' : '<b>' + (s.param === 'ignition'
+        ? (v ? 'ON' : 'OFF') : s.param === 'fuel_level' ? fmt.liters(v)
+        : s.param === 'voltage' ? fmt.num(v, 1) + ' V'
+        : s.param === 'weight' ? fmt.num(v, 1) + ' kg'
+        : Math.round(v) + '%') + '</b> · ';
+      return [s.name, live + '<span class="mono">' + h(s.param) + '</span>'
+        + (s.units ? ' <span class="dim">(' + h(s.units) + ')</span>' : '') + ' &times;' + h(s.coefficient)];
+    }));
   }
   if ((data.maintenance || []).length) {
     html += '<h3 style="margin-top:14px">Service intervals</h3>' + kv(data.maintenance.map(m =>
@@ -496,9 +604,9 @@ function buildMessagesPane() {
   $('#btnExportMessages').addEventListener('click', () => {
     if (!App.messages || !App.messages.length) { toast('Nothing to export', 'warn'); return; }
     const rows = [['Time', 'Latitude', 'Longitude', 'Speed', 'Course', 'Altitude', 'Satellites',
-      'Ignition', 'Fuel', 'Voltage', 'Valid', 'Source', 'Parameters']];
+      'Ignition', 'Fuel', 'Voltage', 'Battery %', 'Weight kg', 'Valid', 'Source', 'Parameters']];
     App.messages.forEach(m => rows.push([m.ts, m.lat, m.lon, m.speed, m.course, m.alt, m.sats,
-      m.ignition, m.fuel, m.voltage, m.valid, m.source, JSON.stringify(m.params)]));
+      m.ignition, m.fuel, m.voltage, m.battery, m.weight, m.valid, m.source, JSON.stringify(m.params)]));
     csvDownload('messages-' + (App.selected ? App.selected.id : 'unit') + '.csv', rows);
   });
 }
@@ -515,7 +623,8 @@ App.loadMessages = async function () {
       columns: [
         { key: 'ts', label: 'Time', type: 'datetime' }, { key: 'speed', label: 'Speed', type: 'speed' },
         { key: 'ignition', label: 'Ign' }, { key: 'fuel', label: 'Fuel', type: 'liters' },
-        { key: 'voltage', label: 'Volt' }, { key: 'sats', label: 'Sats' },
+        { key: 'voltage', label: 'Volt' }, { key: 'battery', label: 'Batt %' },
+        { key: 'weight', label: 'Weight kg' }, { key: 'sats', label: 'Sats' },
         { key: 'lat', label: 'Latitude' }, { key: 'lon', label: 'Longitude' },
         { key: 'source', label: 'Source' }, { key: 'valid', label: 'Valid' },
         { key: 'paramstr', label: 'Parameters' }
@@ -575,3 +684,106 @@ App.loadCommands = async function () {
     });
   } catch (e) { box.innerHTML = ''; }
 }
+
+
+/* -------------------------------- units panel: desktop handle + mobile toggle -- */
+/* Desktop: a ‹ handle at the screen edge slides the units panel fully out
+   (map takes the space); one click on ‹/› restores it. State persisted.
+   Mobile (<=960px): the panel is VISIBLE in the page by default; the topbar
+   "Units" button hides/shows it on tap or click, ✕ hides it, and picking a
+   unit hides the list again. */
+function initSidePanel() {
+  const layout = document.querySelector('.layout');
+  const side = layout ? layout.querySelector(':scope > .side') : null;
+  if (!layout || !side) return;
+
+  /* --- desktop collapse handle -------------------------------------- */
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'side-toggle';
+  toggle.setAttribute('aria-label', 'Collapse units panel');
+  toggle.textContent = '‹';
+  document.body.appendChild(toggle);
+  const setCollapsed = on => {
+    layout.classList.toggle('side-collapsed', on);
+    toggle.textContent = on ? '›' : '‹';
+    toggle.setAttribute('aria-label', on ? 'Expand units panel' : 'Collapse units panel');
+    try { localStorage.setItem('kivu.sideCollapsed', on ? '1' : '0'); } catch (e) { /* private mode */ }
+  };
+  toggle.addEventListener('click', () => setCollapsed(!layout.classList.contains('side-collapsed')));
+  try { if (localStorage.getItem('kivu.sideCollapsed') === '1') setCollapsed(true); } catch (e) { /* private mode */ }
+
+  /* --- mobile: tap/click toggles the stacked panel's visibility -------- */
+  const setVisible = on => {
+    layout.classList.toggle('side-hidden', !on);
+    const b = document.querySelector('.side-open-btn');
+    if (b) b.setAttribute('aria-expanded', String(on));
+    if (on) requestAnimationFrame(() => side.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    setTimeout(() => { try { if (App && App.map && App.map.invalidateSize) App.map.invalidateSize(); } catch (e) {} }, 340); /* kivu-map-resize */
+  };
+  const bar = document.querySelector('.topbar');
+  if (bar) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn sm side-open-btn';
+    btn.textContent = 'Units';
+    btn.setAttribute('aria-label', 'Show or hide units panel');
+    btn.setAttribute('aria-expanded', 'true');
+    btn.addEventListener('click', () => setVisible(layout.classList.contains('side-hidden')));
+    const brand = bar.querySelector('.brand');
+    if (brand && brand.nextSibling) bar.insertBefore(btn, brand.nextSibling);
+    else bar.appendChild(btn);
+  }
+  /* the list stays open until the user taps Units (single click path) */
+}
+
+/* -------------------------------- inspector panel: desktop handle + mobile toggle -- */
+/* Desktop: mirrored ‹/› handle at the right edge; persisted.
+   Mobile: panel visible by default; topbar "Details" hides/shows it (tap/click),
+   ✕ hides it. Panels are independent — both may be visible at once. */
+function initInspectorPanel() {
+  const layout = document.querySelector('.layout');
+  const insp = layout ? layout.querySelector(':scope > .inspector') : null;
+  if (!layout || !insp) return;
+
+  /* --- desktop collapse handle -------------------------------------- */
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'insp-toggle';
+  toggle.setAttribute('aria-label', 'Collapse inspector panel');
+  toggle.textContent = '›';
+  document.body.appendChild(toggle);
+  const setCollapsed = on => {
+    layout.classList.toggle('insp-collapsed', on);
+    toggle.textContent = on ? '‹' : '›';
+    toggle.setAttribute('aria-label', on ? 'Expand inspector panel' : 'Collapse inspector panel');
+    try { localStorage.setItem('kivu.inspectorCollapsed', on ? '1' : '0'); } catch (e) { /* private mode */ }
+  };
+  toggle.addEventListener('click', () => setCollapsed(!layout.classList.contains('insp-collapsed')));
+  try { if (localStorage.getItem('kivu.inspectorCollapsed') === '1') setCollapsed(true); } catch (e) { /* private mode */ }
+
+  /* --- mobile: tap/click toggles visibility --------------------------- */
+  const setVisible = on => {
+    layout.classList.toggle('insp-hidden', !on);
+    const b = document.querySelector('.insp-open-btn');
+    if (b) b.setAttribute('aria-expanded', String(on));
+    if (on) requestAnimationFrame(() => insp.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    setTimeout(() => { try { if (App && App.map && App.map.invalidateSize) App.map.invalidateSize(); } catch (e) {} }, 340); /* kivu-map-resize */
+  };
+  const bar = document.querySelector('.topbar');
+  if (bar) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn sm insp-open-btn';
+    btn.textContent = 'Details';
+    btn.setAttribute('aria-label', 'Show or hide details panel');
+    btn.setAttribute('aria-expanded', 'true');
+    btn.addEventListener('click', () => setVisible(layout.classList.contains('insp-hidden')));
+    const unitBtn = bar.querySelector('.side-open-btn');
+    const brand = bar.querySelector('.brand');
+    if (unitBtn) bar.insertBefore(btn, unitBtn.nextSibling);
+    else if (brand && brand.nextSibling) bar.insertBefore(btn, brand.nextSibling);
+    else bar.appendChild(btn);
+  }
+}
+

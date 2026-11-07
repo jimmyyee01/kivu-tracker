@@ -11,9 +11,9 @@ declare(strict_types=1);
 define('DB_HOST', '127.0.0.1');
 define('DB_NAME', 'kivu_tracker');
 define('DB_USER', 'root');
-define('DB_PASS', 'panzi@123');
+define('DB_PASS', '');
 
-define('SESSION_DAYS', 7);
+define('SESSION_DAYS', 365);  /* sliding renewal: active sessions never lapse until sign-out */
 define('APP_ROOT', dirname(__DIR__));
 define('APP_NAME', 'KIVU Tracker');
 define('APP_VERSION', '1.0.0');
@@ -88,12 +88,21 @@ function ensure_columns(): void {
             'signup_ip' => 'VARCHAR(64) DEFAULT NULL',
             'signup_source' => 'VARCHAR(20) DEFAULT NULL',
             'notes' => 'VARCHAR(255) DEFAULT NULL',
+            'default_module_id' => 'INT UNSIGNED DEFAULT NULL',
+            'enabled_modules_json' => 'LONGTEXT DEFAULT NULL',
         ],
         'units' => [
             'asset_type' => 'VARCHAR(32) DEFAULT NULL',
         ],
         'plans' => [
             'extra_unit_price' => 'DECIMAL(8,2) NOT NULL DEFAULT 0',
+        ],
+        /* website content: each page belongs to the platform (account_id NULL)
+           or to one account, and is typed (landing|help|terms|faq|custom) */
+        'cms_pages' => [
+            'account_id' => 'VARCHAR(32) DEFAULT NULL',
+            'type' => "VARCHAR(20) NOT NULL DEFAULT 'custom'",
+            'asset_type' => 'VARCHAR(32) DEFAULT NULL',
         ],
         'settings' => [
             'trial_days' => 'INT NOT NULL DEFAULT 5',
@@ -111,6 +120,11 @@ function ensure_columns(): void {
             'logo_url' => 'VARCHAR(500) DEFAULT NULL',
             /* optional platform-wide footer credit */
             'powered_by' => 'VARCHAR(180) DEFAULT NULL',
+            /* super admin: global offline-alert delay (minutes; 0 = per-rule value) */
+            'offline_alert_min' => 'INT NOT NULL DEFAULT 10',
+            /* business modules / multi-tenant SaaS */
+            'default_module_slug' => "VARCHAR(64) NOT NULL DEFAULT 'telematics'",
+            'modules_enabled' => 'TINYINT NOT NULL DEFAULT 1',
         ],
     ];
     foreach ($want as $table => $cols) {
@@ -375,7 +389,15 @@ function auth_user(bool $required = true): ?array {
         $u = $st->fetch() ?: null;
         if ($u) {
             if (strtotime((string)$u['expires_at']) < time() || (int)$u['enabled'] !== 1) $u = null;
-            else $u['token'] = $token;
+            else {
+                $u['token'] = $token;
+                /* sliding renewal: an active session is re-dated, never forced out */
+                if (strtotime((string)$u['expires_at']) - time() < (SESSION_DAYS - 1) * 86400) {
+                    $u['expires_at'] = date('Y-m-d H:i:s', time() + SESSION_DAYS * 86400);
+                    db()->prepare('UPDATE sessions SET expires_at = ? WHERE token = ?')
+                        ->execute([$u['expires_at'], $token]);
+                }
+            }
         }
         $cache[$token] = $u;
     }
