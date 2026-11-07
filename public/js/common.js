@@ -780,8 +780,6 @@ function renderTopBar(active) {
   bar.appendChild(navToggle);
   const links = [
     { href: '/app', label: 'Monitoring', match: 'app', roles: ['super', 'admin', 'operator', 'viewer'] },
-    { href: '/m/agriculture', label: 'AgriSmart', match: 'agri', roles: ['super', 'admin', 'operator', 'viewer'] },
-    { href: '/m/health', label: 'HealthConnect', match: 'health', roles: ['super', 'admin', 'operator', 'viewer'] },
     { href: '/reports', label: 'Reports', match: 'reports', roles: ['super', 'admin', 'operator', 'viewer'] },
     { href: '/admin', label: 'Administration', match: 'admin', roles: ['super', 'admin', 'operator'] },
     { href: '/billing', label: 'Billing', match: 'billing', roles: ['super', 'admin'] },
@@ -870,15 +868,6 @@ function applyModuleTheme(meta) {
   set('--accent-2', theme.accent);
   if (mod.logo) brandingRemember(mod.logo);
   if (mod.name && !document.body.dataset.module) document.body.dataset.module = mod.slug || '';
-}
-
-function moduleLink(match) {
-  const mods = (State.meta && State.meta.modules) || [];
-  const find = (s) => mods.find((m) => m && m.slug === s) || null;
-  const m = match === 'agri' ? find('agriculture') : (match === 'health' ? find('health') : null);
-  if (match === 'agri') return { href: (m && m.launch_url) || (m && m.console_path) || '/m/agriculture', label: (m && m.name) || 'AgriSmart', match: 'agri', roles: ['super','admin','operator','viewer'] };
-  if (match === 'health') return { href: (m && m.launch_url) || (m && m.console_path) || '/m/health', label: (m && m.name) || 'HealthConnect', match: 'health', roles: ['super','admin','operator','viewer'] };
-  return null;
 }
 
 function applyTheme() {

@@ -1098,9 +1098,9 @@ function editModule(m) {
     wrap.appendChild(input); body.appendChild(wrap); return input;
   };
   f('module_name', 'Module name', m.name);
-  f('module_slug', 'Slug (path)', m.slug, 'text', { placeholder: 'e.g. agriculture' });
-  f('system_url', 'System URL (subdomain)', t.system_url || t.console_url || '', 'text', { placeholder: 'https://agriculture.kivusystems.com' });
-  f('subdomain', 'Subdomain label', t.subdomain || m.slug || '', 'text', { placeholder: 'agriculture' });
+  f('module_slug', 'Slug (path)', m.slug, 'text', { placeholder: 'e.g. logistics' });
+  f('system_url', 'System URL (subdomain)', t.system_url || t.console_url || '', 'text', { placeholder: 'https://logistics.kivusystems.com' });
+  f('subdomain', 'Subdomain label', t.subdomain || m.slug || '', 'text', { placeholder: 'logistics' });
   f('tagline', 'Tagline', m.tagline);
   f('logo_path', 'Logo path/URL', m.logo, 'text', { placeholder: '/img/branding/... or https://...' });
   f('is_active', 'Active', m.is_active !== 0, 'checkbox');

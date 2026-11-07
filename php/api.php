@@ -29,8 +29,6 @@ require_once __DIR__ . '/routes_portals.php';
 require_once __DIR__ . '/routes_finance.php';
 require_once __DIR__ . '/routes_cms.php';       // public website content (super admin)
 require_once __DIR__ . '/routes_modules.php';   // business modules / multi-tenant SaaS
-if (is_file(__DIR__ . '/routes_agri.php')) require_once __DIR__ . '/routes_agri.php';
-if (is_file(__DIR__ . '/routes_health.php')) require_once __DIR__ . '/routes_health.php';
 
 /* JSON endpoints must never print PHP notices into the body — a stray warning
    corrupts the envelope and the browser reports a broken/aborted response.
@@ -62,8 +60,6 @@ function api_routes(): array {
     return array_merge(
         routes_auth(), routes_units(), routes_geo(), routes_reports(), routes_admin(), routes_billing(),
         routes_portals(), routes_finance(), routes_cms(), routes_modules(),
-        (function_exists('routes_agri') ? routes_agri() : []),
-        (function_exists('routes_health') ? routes_health() : []),
         [
             ['GET', '#^/health$#', 'h_health', 'public'],
             ['GET', '#^/app$#', 'h_app_info', 'public'],

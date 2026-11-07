@@ -13,11 +13,47 @@ function module_reserved_slugs(): array {
         'css','js','img','icons','tools','data','php','install','module','modules','m'];
 }
 
+/* The verticals that ship with the platform. They are part of the core
+   product: they cannot be deleted (disable them instead), and they are always
+   seeded. Verticals that were once shipped and are no longer offered are
+   listed in module_retired_slugs() and purged from existing databases. */
+function module_core_slugs(): array {
+    return ['telematics'];
+}
+function module_retired_slugs(): array {
+    return ['agriculture', 'health'];
+}
+
+/* Remove the retired verticals (AgriSmart, HealthConnect) from a database that
+   was installed while they still shipped. Idempotent: after the first run the
+   SELECT finds nothing. Runs before the seed check, so it is not skipped when
+   business_modules already has rows. */
+function module_purge_retired(): void {
+    static $done = false;
+    if ($done) return;
+    $done = true;
+    $slugs = module_retired_slugs();
+    if (!$slugs) return;
+    try {
+        $in = implode(',', array_fill(0, count($slugs), '?'));
+        $st = db()->prepare("SELECT id, module_slug FROM business_modules WHERE module_slug IN ($in)");
+        $st->execute($slugs);
+        foreach ($st->fetchAll() as $m) {
+            $id = (int)$m['id'];
+            db()->prepare('DELETE FROM dynamic_pages WHERE module_id=?')->execute([$id]);
+            try { db()->prepare('DELETE FROM module_domains WHERE module_id=?')->execute([$id]); } catch (Throwable $e) {}
+            db()->prepare('DELETE FROM business_modules WHERE id=?')->execute([$id]);
+            try { audit('module_retired_removed', 'business_module', (string)$id, ['slug' => $m['module_slug']]); } catch (Throwable $e) {}
+        }
+    } catch (Throwable $e) { /* table not created yet — nothing to purge */ }
+}
+
 /* ----------------------------------------------------------- DB access -- */
 function module_seed_defaults(): void {
     static $done = false;
     if ($done) return;
     $done = true;
+    module_purge_retired();
     try {
         ensure_schema();
         $n = (int)db()->query('SELECT COUNT(*) FROM business_modules')->fetchColumn();
@@ -29,16 +65,6 @@ function module_seed_defaults(): void {
                       'surface' => '#161d2d', 'text' => '#dfe6f2', 'font' => 'system-ui, Segoe UI, Arial, sans-serif',
                       'mode' => 'dark', 'system_url' => 'https://telematics.example.com', 'subdomain' => 'telematics']),
                 1, 10],
-            ['agriculture', 'Kivu AgriSmart', 'Farm, crop, livestock and yield management', null,
-                jenc(['primary' => '#15803d', 'accent' => '#84cc16', 'bg' => '#f4fbf4',
-                      'surface' => '#ffffff', 'text' => '#102015', 'font' => 'system-ui, Segoe UI, Arial, sans-serif',
-                      'mode' => 'light', 'system_url' => 'https://agriculture.example.com', 'subdomain' => 'agriculture']),
-                1, 20],
-            ['health', 'Kivu HealthConnect', 'Tele-nursing, scheduling and care-plan management', null,
-                jenc(['primary' => '#0f766e', 'accent' => '#38bdf8', 'bg' => '#f4fbfb',
-                      'surface' => '#ffffff', 'text' => '#102022', 'font' => 'system-ui, Segoe UI, Arial, sans-serif',
-                      'mode' => 'light', 'system_url' => 'https://health.example.com', 'subdomain' => 'health']),
-                1, 30],
         ];
         $st = db()->prepare('INSERT INTO business_modules
             (module_slug,module_name,tagline,logo_path,theme_config,is_active,sort_order,created_at,updated_at)
@@ -50,7 +76,7 @@ function module_seed_defaults(): void {
 
 function module_seed_default_pages(): void {
     try {
-        $mods = db()->query("SELECT id, module_slug, module_name, tagline FROM business_modules WHERE module_slug IN ('telematics','agriculture','health')")->fetchAll();
+        $mods = db()->query("SELECT id, module_slug, module_name, tagline FROM business_modules WHERE module_slug = 'telematics'")->fetchAll();
         $st = db()->prepare('SELECT id FROM dynamic_pages WHERE module_id = ? AND account_id IS NULL LIMIT 1');
         $ins = db()->prepare('INSERT INTO dynamic_pages
             (module_id,account_id,title,slug,content,content_type,nav_position,show_in_nav,status,meta_desc,created_at,updated_at,updated_by)
@@ -77,12 +103,6 @@ function module_starter_blocks(string $slug, string $name, string $tagline): arr
         'telematics' => [['title' => 'Live GPS tracking', 'body' => 'Real-time positions, status, and device connectivity on the telematics subdomain.'],
                          ['title' => 'Trips & geofences', 'body' => 'Detect trips/parking and enter/exit events with alerts.'],
                          ['title' => 'Reports & billing', 'body' => 'Operational reports, CSV export, and subscription management.']],
-        'agriculture' => [['title' => 'Crop cycle tracking', 'body' => 'Plan, plant, monitor and harvest by field and season.'],
-                          ['title' => 'Livestock & inventory', 'body' => 'Track animals, feed, inputs, and stock levels.'],
-                          ['title' => 'Yield analytics', 'body' => 'Measure harvests and revenue over time.']],
-        'health' => [['title' => 'Tele-nursing scheduling', 'body' => 'Book and manage consultations and home visits.'],
-                     ['title' => 'Vitals & care plans', 'body' => 'Record vitals and maintain structured care plans.'],
-                     ['title' => 'Secure messaging', 'body' => 'Coordinate care with audited, role-based access.']],
     ];
     $blocks = [['type' => 'hero', 'props' => ['title' => $name, 'subtitle' => $tagline ?: 'Powered by Kivu Systems', 'eyebrow' => 'Kivu Systems']],
                ['type' => 'actions', 'props' => ['items' => $commonCta]]];
@@ -405,7 +425,7 @@ function module_delete(int $id, ?array $u = null): void {
     $m = module_by_id($id);
     need($m, 'Module not found', 404);
     $slug = (string)$m['module_slug'];
-    need(!in_array($slug, ['telematics','agriculture','health'], true), 'Core modules cannot be deleted; disable them instead.', 409);
+    need(!in_array($slug, module_core_slugs(), true), 'Core modules cannot be deleted; disable them instead.', 409);
     db()->prepare('DELETE FROM dynamic_pages WHERE module_id=?')->execute([$id]);
     try { db()->prepare('DELETE FROM module_domains WHERE module_id=?')->execute([$id]); } catch (Throwable $e) {}
     db()->prepare('DELETE FROM business_modules WHERE id=?')->execute([$id]);

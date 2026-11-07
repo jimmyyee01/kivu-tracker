@@ -70,12 +70,10 @@ $serveHtml = function (string $file) use ($root): bool {
     return true;
 };
 
-/* Business modules (mirrors .htaccess): /m/<slug> console shells, the
-   agriculture and health landing pages rendered by php/module.php, and
-   /<module>/p/<page> dynamic pages. /telematics keeps the console. */
+/* Business modules (mirrors .htaccess): /m/<slug> console shells and
+   /<module>/p/<page> dynamic pages rendered by php/module.php.
+   /telematics keeps the console. */
 if ($path === 'telematics') return $serveHtml('app.html');
-if ($path === 'm/agriculture') return $serveHtml('agri.html');
-if ($path === 'm/health') return $serveHtml('health.html');
 if (preg_match('#^m/([a-z0-9\-]{2,64})/?$#', $path, $m)) {
     $_GET['module'] = $m[1];
     $_GET['console'] = '1';
@@ -85,11 +83,6 @@ if (preg_match('#^m/([a-z0-9\-]{2,64})/?$#', $path, $m)) {
 if (preg_match('#^([a-z0-9\-]{2,64})/p/([a-z0-9\-]{1,64})/?$#', $path, $m)) {
     $_GET['module'] = $m[1];
     $_GET['slug'] = $m[2];
-    require $root . '/php/module.php';
-    return true;
-}
-if (preg_match('#^(agriculture|health)/?$#', $path, $m)) {
-    $_GET['module'] = $m[1];
     require $root . '/php/module.php';
     return true;
 }

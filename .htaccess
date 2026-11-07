@@ -31,8 +31,6 @@ RewriteRule ^index\.html$ public/index.html   [L]
 
 # Business-module consoles (systems live on subdomains; these are local/dev fallbacks)
 RewriteRule ^telematics/?$      public/app.html      [L]
-RewriteRule ^m/agriculture/?$   public/agri.html     [L]
-RewriteRule ^m/health/?$        public/health.html   [L]
 RewriteRule ^m/([a-z0-9\-]{2,64})/?$ php/module.php?module=$1&console=1 [L,QSA]
 
 # Content manager (super admin only, refused for the mobile app) + public
@@ -46,8 +44,6 @@ RewriteRule ^pay/([A-Za-z0-9_\-]{3,64})/?$ public/pay.html [L]
 
 # Module dynamic pages (published, SSR) — must come before the generic module rule
 RewriteRule ^([a-z0-9\-]{2,64})/p/([a-z0-9\-]{1,64})/?$ php/module.php?module=$1&slug=$2 [L,QSA]
-# Module landing pages (telematics keeps legacy CMS/static behavior at /)
-RewriteRule ^(agriculture|health)/?$ php/module.php?module=$1 [L,QSA]
 
 RewriteRule ^$          php/cms.php         [L]
 
