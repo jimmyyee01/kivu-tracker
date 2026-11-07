@@ -41,6 +41,8 @@
   <section class="center">
     <div class="map-wrap">
       <div id="map"></div>
+      <!-- mobile only: mirrors the fleet counters onto the map (filled by app.js) -->
+      <div class="map-fleet" id="mapFleet" aria-live="polite"></div>
       <div class="map-toolbar no-print">
         <button class="btn sm active" id="btnAutoFit" title="Keep the whole fleet in view">Auto-fit: on</button>
         <button class="btn sm" id="btnFitAll" title="Zoom to every unit now">Fit all</button>

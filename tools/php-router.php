@@ -60,12 +60,47 @@ if ($path === 'cms') {
     return true;
 }
 
+/* one helper for serving a page from public/ (same headers as Apache) */
+$serveHtml = function (string $file) use ($root): bool {
+    $full = $root . '/public/' . $file;
+    if (!is_file($full)) { http_response_code(404); return true; }
+    header('Content-Type: text/html; charset=utf-8');
+    header('Cache-Control: no-store');
+    readfile($full);
+    return true;
+};
+
+/* Business modules (mirrors .htaccess): /m/<slug> console shells, the
+   agriculture and health landing pages rendered by php/module.php, and
+   /<module>/p/<page> dynamic pages. /telematics keeps the console. */
+if ($path === 'telematics') return $serveHtml('app.html');
+if ($path === 'm/agriculture') return $serveHtml('agri.html');
+if ($path === 'm/health') return $serveHtml('health.html');
+if (preg_match('#^m/([a-z0-9\-]{2,64})/?$#', $path, $m)) {
+    $_GET['module'] = $m[1];
+    $_GET['console'] = '1';
+    require $root . '/php/module.php';
+    return true;
+}
+if (preg_match('#^([a-z0-9\-]{2,64})/p/([a-z0-9\-]{1,64})/?$#', $path, $m)) {
+    $_GET['module'] = $m[1];
+    $_GET['slug'] = $m[2];
+    require $root . '/php/module.php';
+    return true;
+}
+if (preg_match('#^(agriculture|health)/?$#', $path, $m)) {
+    $_GET['module'] = $m[1];
+    require $root . '/php/module.php';
+    return true;
+}
+
 /* pretty pages */
 $pages = ['login' => 'login.html', 'app' => 'app.html', 'admin' => 'admin.html',
     'reports' => 'reports.html', 'super' => 'super.html', 'track' => 'track.html',
     'welcome' => 'index.html', 'index.html' => 'index.html',
     'register' => 'register.html', 'signup' => 'register.html', 'billing' => 'billing.html',
     'reseller' => 'reseller.html', 'pay' => 'pay.html', 'download' => 'download.html',
+    'modules' => 'modules.html',
     'manual' => 'manual.html'];
 if (isset($pages[$path])) {
     header('Content-Type: text/html; charset=utf-8');
