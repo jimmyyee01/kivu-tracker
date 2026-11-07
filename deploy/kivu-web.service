@@ -1,0 +1,27 @@
+# =====================================================================
+#  KIVU Tracker — kivu-web.service
+#  Web console + JSON API. PHP's built-in server with the bundled
+#  router (Apache users get the same routing from .htaccess instead).
+#
+#  Install (as root):
+#     cp deploy/kivu-web.service /etc/systemd/system/
+#     systemctl daemon-reload && systemctl enable --now kivu-web
+#  Logs:  journalctl -u kivu-web -f     (plus data/web.log + data/web.err)
+# =====================================================================
+[Unit]
+Description=KIVU Tracker web console (php -S 0.0.0.0:8099)
+After=network.target mysql.service mariadb.service
+
+[Service]
+Type=simple
+User=administrator
+Group=administrator
+WorkingDirectory=/home/administrator/kivu-tracker
+ExecStart=/usr/bin/php -S 0.0.0.0:8099 -t /home/administrator/kivu-tracker /home/administrator/kivu-tracker/tools/php-router.php
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/administrator/kivu-tracker/data/web.log
+StandardError=append:/home/administrator/kivu-tracker/data/web.err
+
+[Install]
+WantedBy=multi-user.target

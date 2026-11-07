@@ -1,0 +1,28 @@
+# =====================================================================
+#  KIVU Tracker — kivu-ips.service
+#  Wialon IPS 1.1 device server (raw TCP, default port 20332).
+#  Single process, one socket per tracker, survives reboots.
+#
+#  Install (as root):
+#     cp deploy/kivu-ips.service /etc/systemd/system/
+#     systemctl daemon-reload && systemctl enable --now kivu-ips
+#  Logs:  journalctl -u kivu-ips -f     (plus data/ips.log)
+#  Check: ss -lntp | grep 20332
+# =====================================================================
+[Unit]
+Description=KIVU Tracker IPS daemon (Wialon IPS 1.1, TCP 20332)
+After=network.target mysql.service mariadb.service
+
+[Service]
+Type=simple
+User=administrator
+Group=administrator
+WorkingDirectory=/home/administrator/kivu-tracker
+ExecStart=/usr/bin/php /home/administrator/kivu-tracker/php/tracker.php --verbose
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/administrator/kivu-tracker/data/ips.log
+StandardError=append:/home/administrator/kivu-tracker/data/ips.err
+
+[Install]
+WantedBy=multi-user.target

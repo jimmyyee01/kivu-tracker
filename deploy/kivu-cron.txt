@@ -1,0 +1,25 @@
+# =====================================================================
+#  KIVU Tracker — optional housekeeping cron (crontab -e)
+#
+#  The IPS daemon already runs the scheduled checks itself (offline /
+#  maintenance alerts, billing reminders). This cron entry is for the
+#  jobs the daemon does NOT do on a timer: trip detection, telemetry
+#  pruning (retention_days) and subscription renewals — useful when the
+#  daemon is down or on a server that only runs the web console.
+#
+#  One-time: mint a session token and store it (it lives in the sessions
+#  table and lasts a year, like a browser login):
+#
+#     cd /home/administrator/kivu-tracker
+#     php -r 'require "php/config.php";
+#       $u = db()->query("SELECT id FROM users WHERE role=\"super\" LIMIT 1")->fetch();
+#       $t = bin2hex(random_bytes(32));
+#       db()->prepare("INSERT INTO sessions (token,user_id,created_at,expires_at,ip,user_agent) VALUES (?,?,?,?,?,?)")
+#           ->execute([$t, $u["id"], now_dt(), date("Y-m-d H:i:s", time()+365*86400), "127.0.0.1", "cron"]);
+#       echo $t, PHP_EOL;' > ~/.kivu-token
+#     chmod 600 ~/.kivu-token
+#
+#  Then add the line below with:  crontab -e
+# =====================================================================
+
+*/10 * * * * curl -s -m 120 -X POST -H "X-Auth-Token: $(cat $HOME/.kivu-token)" http://127.0.0.1:8099/api/tasks/run >> $HOME/kivu-tracker/data/cron.log 2>&1

@@ -23,3 +23,7 @@ Thumbs.db
 *.bak
 .idea/
 .vscode/
+.kilo/
+
+# build logs
+android/build.log

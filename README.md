@@ -36,7 +36,9 @@ powershell -ExecutionPolicy Bypass -File android\build-apk.ps1   # Windows
 bash android/build-apk.sh                                        # Linux / macOS
 ```
 
-Then open `http://127.0.0.1:8099/` — the landing page links to every console:
+Then open `http://127.0.0.1:8099/`. With no CMS page marked as *home*, that URL
+goes straight to the sign-in form at `/login`; the built-in marketing page lives
+at `/welcome` and links to every console:
 
 | URL | What it is |
 |---|---|
@@ -47,9 +49,35 @@ Then open `http://127.0.0.1:8099/` — the landing page links to every console:
 | `/register` | **Self-service signup** — plan picker, account + admin user, starts the 5-day free trial |
 | `/pay/<invoice>` | Simulated ("sandbox") gateway page — used while no live API keys are configured |
 | `/super` | **Platform accounts, plans &amp; billing** — accounts, plans, invoices, gateway keys, platform settings, health, audit |
+| `/cms` | **Website content** — the CMS: platform *and* per-account pages with types (admin/super, desktop only — never in the app) |
+| `/p/<slug>` | A published platform page, rendered server-side (`/` serves the page flagged *front page*) |
+| `/p/<account>/<slug>` | A published page of one account; `/p/<account>` serves that account's landing page |
 | `/track/<unit-id>` | Focused single-unit page — ideal for a client login restricted to one unit |
 | `/download` | **Android app download** — version, size, SHA-256, install steps (public; also in the top bar as *Get the app*) |
 | `/login` | Sign in |
+
+### Deploying to a VPS
+
+The `deploy/` folder carries a complete Linux deployment kit (details and the
+troubleshooting table are in `deploy/README.md`):
+
+```powershell
+# from this working copy, straight onto the server (backup + verify included)
+powershell -ExecutionPolicy Bypass -File deploy\deploy-from-windows.ps1
+```
+
+```bash
+# on a fresh Ubuntu/Debian server
+sudo bash install-fresh-vps.sh /tmp/kivu-tracker.tar.gz \
+     --app-dir=/home/administrator/kivu-tracker --run-user=administrator
+```
+
+The deploy takes a backup on the server (`~/kivu-backups/`), refuses to copy a
+release whose PHP files fail `php -l`, keeps the server's own `php/config.php`,
+runs `install.php` (idempotent — it never seeds over live data), restarts the
+`kivu-web` and `kivu-ips` systemd units and then checks `/api/meta`, the IPS
+port and the database. `deploy/bootstrap.php` sets up a clean server (schema +
+settings + one super admin) without the demo fleet.
 
 ### In-app client support
 Every page includes a small support button at the lower-right edge. It opens a keyboard-accessible
@@ -59,6 +87,12 @@ This is a built-in help guide, not a live AI service: questions stay in the brow
 to an external provider. Users should not enter passwords or other sensitive information in the panel.
 
 ### Demo accounts (created by `install.php`)
+
+These exist only on a **locally seeded** database — a fresh VPS deployed with
+`deploy/bootstrap.php` has a single super admin and no demo fleet. The sign-in
+page never publishes them: `/login` stopped listing demo credentials, so the
+table below is the only place they are written down. Delete these users before
+handing a seeded install to a client.
 
 | Role | Username | Password | Sees |
 |---|---|---|---|
@@ -197,6 +231,43 @@ A downloadable phone client, so users can work from the field:
 * **Super-admin settings** — `apk_version`, `apk_notes` and `apk_url` (any `http(s)://` address wins
   over the local file, e.g. when the APK lives on a CDN) under *Platform settings*.
 
+### Website content (`/cms`) — the CMS
+A content manager for the public site, for the platform **and for every account**:
+
+* **Two scopes.** Pages belong either to the *platform website* (`account_id` NULL) or to **one
+  account**. The super admin picks the scope from the account selector (or *All accounts* for an
+  overview); an account admin is locked to their own account — they cannot see or touch the platform
+  site or another account's pages (the API answers 403).
+* **Page types.** Every page carries a `type` — **landing**, **help**, **terms**, **faq** or
+  **custom** — and an optional **asset type** (lorry, motorcycle, car, machine, …) for content that
+  only applies to one kind of vehicle. The manager filters by scope, type and asset type.
+* **Addresses.** Platform pages live at `/p/<slug>` (the page flagged *front page* renders at `/`);
+  an account's pages live at `/p/<account-slug>/<slug>`, and `/p/<account-slug>` serves that
+  account's *landing* page. Slugs are unique **per account**, so `acme/help` and `beta/help` (and a
+  platform `help`) can all coexist.
+* **Blocks** (`cms_blocks`) — heading, paragraph, feature card, button, bullet list, image, quote,
+  code block, divider and raw HTML. Ordered, individually disableable, with ↑/↓, save and delete per
+  block; consecutive feature cards and buttons are grouped into the landing page's card grid.
+* **Starter content** — *Load starter page* creates the platform `home` page, or a typed
+  **landing + help + terms** set for the selected account (only while that scope has no pages).
+* **Export / import JSON** — scoped the same way (a super admin can export *All accounts*); import
+  matches pages by (account, slug) and replaces their blocks, so it doubles as a restore.
+* **Rendering is server-side** (`php/cms.php`): no JavaScript required, real `meta description`, the
+  account's own name and menu on its pages, and a fallback to the static `public/index.html` for `/`
+  when there is no front page or the database is unreachable.
+* **Inside the account console** an account's published `help`/`terms`/`landing` pages are returned
+  by `/api/meta` (`cms.help_url`, `cms.help_title`, …), so the top bar can link straight to them.
+* Every change is written to the audit log (`cms_page_created`, `cms_block_updated`,
+  `cms_blocks_reordered`, …), and the platform's usual subscription gate applies: an account whose
+  plan lapsed can read but not edit (same as every other admin route).
+* **Not in the mobile app.** The manager is a desktop console and is refused three times over:
+  `common.js` hides the *Website* link (and `cms.js` stops before requesting anything),
+  `php/cms-manager.php` answers **403** to the app's user agent (so no CMS markup is sent at all),
+  and every `/api/cms/*` route refuses the app as well. Public pages (`/p/<slug>`,
+  `/p/<account>/<slug>`, `/`) are ordinary website content and stay reachable everywhere, the app
+  included. The Android client identifies itself as `KIVU-Tracker-Android/<version>`, and any
+  Android WebView (`; wv`) is treated the same, so the URL alone is not enough to open the manager.
+
 ### Platform logo (system settings)
 The super admin uploads the platform logo in **Accounts → Platform settings → Platform logo**:
 * **Upload** a PNG, JPG, WebP, GIF or SVG (up to 512 KB) — or paste any image URL in the
@@ -254,11 +325,19 @@ Four platform-wide reports, all range-filtered (`?from=…&to=…`) and exportab
   with the protocol, the connection path and example hardware. It is served in `/api/meta`,
   listed in the super console under *System → Supported devices & protocols*, and drives the
   **hardware type** dropdown of the unit form (`hw_type`).
-* **Free map styles** — the monitoring console carries a map picker (`MAP_STYLES` in `common.js`)
-  with the **platform default** (whatever `settings.map_tiles` is configured to) plus OpenStreetMap,
-  OpenTopoMap, OSM Humanitarian, CyclOSM and the two Carto basemaps. The choice is remembered per
-  browser (`localStorage`) and applied to both the Leaflet and the offline canvas backend, so the
-  default never changes server-side unless the super admin changes the platform tiles.
+* **Free map styles** — the monitoring console carries a grouped map picker (`MAP_STYLES` in
+  `common.js`) with the **platform default** (whatever `settings.map_tiles` is configured to) plus
+  **24 free, key-less raster layers** in six groups: OpenStreetMap (standard, humanitarian, CyclOSM,
+  Germany, France), **Google** (roadmap, satellite, hybrid, terrain — the classic `mt1.google.com/vt`
+  tiles, no API key and no billing account), **Esri ArcGIS** (World Imagery, Street, Topographic,
+  Light Gray Canvas, Dark Gray Canvas, NatGeo, Shaded Relief, Ocean), **Carto** (Positron, Dark
+  Matter, Voyager, Voyager without labels), OpenTopoMap and USGS Topo (US coverage only). Every entry
+  carries its own `maxZoom`, so choosing Google or Esri lifts the zoom ceiling above the OSM limit of
+  19. The choice is remembered per browser (`localStorage`) and applied to both the Leaflet and the
+  offline canvas backend (which substitutes the `{s}` and `{r}` tokens itself), so the default never
+  changes server-side unless the super admin changes the platform tiles. Wikimedia is deliberately
+  *not* listed: `maps.wikimedia.org` answers 403 to third-party referers.
+  `tools/map-providers-check.js` re-verifies that every provider still returns a tile.
 
 ### Accounts, roles and audit (`/super`)
 * Accounts (resources) with plan, unit limit, retention, currency, timezone and
@@ -344,6 +423,7 @@ Four platform-wide reports, all range-filtered (`?from=…&to=…`) and exportab
 | `webhook-sink.php` | tiny webhook receiver used by the API suite (webhooks must not target the same `php -S`) |
 | `jscheck.php` | dependency-free JavaScript checker (no Node required): bracket balance, unterminated strings/regex **and declarations without an initialiser** (`const x(` → the "Missing initializer" error that silently kills a whole file) |
 | `pagecheck.php` | cross-checks each HTML page against the element ids its scripts use |
+| `map-providers-check.js` | checks the monitoring console's map picker: every `MAP_STYLES` record (id, label, `maxZoom`, `{z}`/`{x}`/`{y}` tokens), that `kivu_map` values saved by older releases still resolve, and that each provider really answers with an image tile (`node tools/map-providers-check.js`, exit code 1 on failure) |
 | `../android/` | the Android client (source: WebView console + tracker mode) — see `android/README.md` |
 | `../android/build-apk.ps1`, `../android/build-apk.sh` | one-command APK build; publish the result into `public/download/` |
 
@@ -356,6 +436,14 @@ kivu-tracker/
 ├─ install.php               one-time installer / demo seeder (CLI or browser)
 ├─ database.sql              full schema (every statement is CREATE TABLE IF NOT EXISTS)
 ├─ .htaccess                 Apache routing (api/, pages, static assets)
+├─ deploy/                   VPS deployment kit (see deploy/README.md)
+│  ├─ deploy-from-windows.ps1  one command: package this copy and deploy it over SSH
+│  ├─ remote-deploy.sh         server side: backup, php -l gate, copy, restart, verify
+│  ├─ install-fresh-vps.sh     fresh Ubuntu/Debian: packages, MariaDB, systemd, firewall
+│  ├─ bootstrap.php            schema + settings + first super admin (no demo data)
+│  ├─ kivu-web.service         systemd unit for the console + API (php -S 0.0.0.0:8099)
+│  ├─ kivu-ips.service         systemd unit for the IPS device server (TCP 20332)
+│  └─ kivu-cron.txt            optional /api/tasks/run cron line
 ├─ php/
 │  ├─ config.php             PDO connection, helpers, auth/sessions, schema bootstrap
 │  ├─ engine.php             geo maths, offline geocoder, unit state/live shapes
@@ -371,11 +459,14 @@ kivu-tracker/
 │  ├─ routes_geo.php         geofences (+state, events) and notification rules
 │  ├─ routes_reports.php     report catalogue, run, CSV export, templates
 │  ├─ routes_admin.php       accounts and platform settings
+│  ├─ routes_cms.php         website content: pages, blocks, reorder, seed, export/import
+│  ├─ cms.php                public renderer for CMS pages (/p/<slug>, and / for the front page)
+│  ├─ cms-manager.php        serves the manager shell (/cms) — 403 for the mobile app
 │  └─ demo.php               gazetteer, demo routes, track generator, demo seeder
 ├─ public/                   everything the browser loads
-│  ├─ index.html login.html app.html admin.html reports.html super.html track.html
+│  ├─ index.html login.html app.html admin.html reports.html super.html track.html cms.html
 │  ├─ css/style.css          the design system (dark, responsive, print styles)
-│  └─ js/ common.js mapcore.js charts.js app.js admin.js reports.js super.js track.js login.js
+│  └─ js/ common.js mapcore.js charts.js app.js admin.js reports.js super.js track.js login.js cms.js
 ├─ tools/                    dev router, simulator, generators, test suites
 └─ data/                     runtime logs (git-ignored)
 ```
@@ -433,6 +524,25 @@ Access levels: `public`, `read` (any signed-in user), `write` (anything but a vi
 | `GET /api/audit` | admin | audit trail |
 | `POST /api/tasks/run` | read | run the scheduled jobs (detector, alerts, pruning, billing renewals, payment reminders) |
 | `POST /api/ingest` | public (device credentials) | HTTP position ingest |
+| `GET /api/cms/public/pages`, `GET /api/cms/public/page/<slug>` | public | published CMS pages (the renderer uses these) |
+
+### Website content API (CMS)
+
+| Method and path | Level | Purpose |
+|---|---|---|
+| `GET /api/cms/pages` | admin | page list for the caller's scope (`?account_id=`, `?type=`, `?asset_type=`) + the account, type and asset-type pickers |
+| `POST /api/cms/pages`, `GET/PUT/DELETE /api/cms/page/<id>` | admin | create / read / update / delete a page (platform pages need the super admin) |
+| `POST /api/cms/page/<id>/blocks`, `PUT/DELETE /api/cms/block/<id>` | admin | add / update / delete a block |
+| `POST /api/cms/page/<id>/reorder` | admin | `{ "ids": [...] }` — the new block order |
+| `POST /api/cms/seed` | admin | starter `home` page (platform) or landing+help+terms (the selected account) |
+| `GET /api/cms/export`, `POST /api/cms/import` | admin | scoped JSON backup and restore (`?account_id=all` for everything) |
+| `GET /api/cms/public/pages`, `.../page/<slug>`, `.../type/<type>` | public | published content (`?account=<slug>`) |
+
+`admin` level means "platform admin or account admin": the handlers scope every call —
+`cms_scope_account()` pins an account admin to their own account and `cms_may_edit()` refuses
+platform pages for them (403). Operators, viewers and resellers are refused as well. Every route in
+this group answers **403** when the request comes from the mobile app (`KIVU-Tracker-Android` or any
+Android WebView), and `/cms` itself is refused for those user agents by `php/cms-manager.php`.
 
 ### Billing API
 
@@ -501,6 +611,7 @@ and the API returns 403 (not 404) for masked units so clients can tell the diffe
 ```bash
 php tools/jscheck.php                         # JS balance check for every public/js file
 php tools/pagecheck.php                       # page <-> script id cross-check
+node tools/map-providers-check.js             # map provider/tile check (23 remote layers must answer with an image)
 php tools/api-test.php http://127.0.0.1:8099  # 327 end-to-end API checks (exit code 1 on failure)
 php tools/protocol-test.php --port=20399      # 41 Wialon IPS protocol checks (starts its own tracker)
 php tools/payments-test.php                   # 86 gateway checks (starts tools/gateway-stub.php)
