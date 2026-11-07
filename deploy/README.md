@@ -14,6 +14,7 @@ still work exactly as before.
 | `kivu-ips.service` | systemd unit for the Wialon IPS device server (TCP **20333**) |
 | `gt06-bridge.service` | systemd unit for the Concox/GT06 bridge used by the real trackers (TCP **20332**) |
 | `kivu-cron.txt` | optional `/api/tasks/run` cron line (trip detection, pruning, renewals) |
+| `git-hooks/post-receive` | install on the VPS bare repo to make `git push vps main` deploy (see A2) |
 
 ## The production server
 
@@ -86,6 +87,51 @@ Once `-SetupKey` has run, deploys are completely unattended:
 ```powershell
 powershell -ExecutionPolicy Bypass -File deploy\deploy-from-windows.ps1
 ```
+
+## A2. Deploy with `git push` (fastest once set up)
+
+The VPS holds a bare repository at `/home/administrator/kivu-tracker.git`
+whose `post-receive` hook runs the *same* `deploy/remote-deploy.sh` as the
+Windows script — backup → `php -l` gate → copy → schema top-up → verify. A bad
+push therefore cannot half-write the live tree, and `data/` plus the production
+`php/config.php` are never touched.
+
+One-time setup on your PC:
+
+```powershell
+cd "C:\Users\MAMA TECH SOLUTIONS\AppData\Local\Cline\kivu-tracker"
+git remote add vps administrator@108.181.196.187:/home/administrator/kivu-tracker.git
+```
+
+One-time setup on the server (the hook is committed as
+`deploy/git-hooks/post-receive`):
+
+```bash
+git init --bare ~/kivu-tracker.git
+cp ~/kivu-tracker/deploy/git-hooks/post-receive ~/kivu-tracker.git/hooks/post-receive
+chmod +x ~/kivu-tracker.git/hooks/post-receive
+```
+
+Then, for every release:
+
+```powershell
+git push vps main        # deploys main to the VPS
+```
+
+Notes:
+
+* SSH goes through `plink`/`pscp` if that is your Windows client, so pass the
+  port and password to git instead of editing `~/.ssh/config`:
+  `$env:GIT_SSH_COMMAND='plink -ssh -batch -P 10051 -pw <password>'`
+* the hook logs everything to `/home/administrator/kivu-push.log`
+  (`tail -f` it on the server to watch a deploy); the last line shows `rc=0`
+  on success
+* the hook runs as `administrator`, so it cannot `sudo systemctl restart`.
+  That is fine for web changes — `php -S` reads every file per request — but a
+  change to a systemd unit or to `php/tracker.php` still needs
+  `sudo systemctl restart kivu-web kivu-ips` over SSH
+* prefer `deploy-from-windows.ps1` when you want the tarball path (it can also
+  `-SetupKey`, `-InstallUnits`, `-NoMigrate`) or when you are not in git
 
 ## B. Fresh VPS (new server)
 

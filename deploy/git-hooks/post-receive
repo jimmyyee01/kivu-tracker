@@ -1,0 +1,49 @@
+#!/bin/bash
+# KIVU Tracker — post-receive hook
+#
+# Turns "git push vps main" into a real deploy by reusing the *same* path as
+# deploy/deploy-from-windows.ps1: export the pushed tree, then hand it to
+# remote-deploy.sh, which takes a backup, runs `php -l` on every PHP file,
+# copies the files, keeps the production php/config.php and leaves data/ alone.
+#
+# Nothing here touches the live directory directly, so a bad push cannot leave
+# the app half-written: remote-deploy.sh aborts before copying on a syntax error
+# and prints the exact rollback command otherwise.
+set -u
+umask 022
+
+GIT_DIR_REPO="/home/administrator/kivu-tracker.git"
+APP_DIR="/home/administrator/kivu-tracker"
+TREE="/tmp/kivu-push-tree"
+TAR="/tmp/kivu-push.tar.gz"
+LOG="/home/administrator/kivu-push.log"
+
+exec >>"$LOG" 2>&1
+echo
+echo "=== $(date -Is) push received ==="
+
+while read -r oldrev newrev refname; do
+    echo "  ref $refname  $oldrev -> $newrev"
+done
+
+# export the newest tip of main (or whatever was pushed) into a scratch tree
+rm -rf "$TREE"
+mkdir -p "$TREE"
+GIT_DIR="$GIT_DIR_REPO" GIT_WORK_TREE="$TREE" git checkout -f -q main \
+    || { echo "  ERROR: could not check out main"; exit 1; }
+
+rm -f "$TAR"
+tar -czf "$TAR" -C "$TREE" --exclude=.git . \
+    || { echo "  ERROR: could not package the tree"; exit 1; }
+echo "  packaged $(du -h "$TAR" | cut -f1)"
+
+if [ ! -x "$APP_DIR/deploy/remote-deploy.sh" ] && [ ! -f "$APP_DIR/deploy/remote-deploy.sh" ]; then
+    echo "  ERROR: $APP_DIR/deploy/remote-deploy.sh is missing"
+    exit 1
+fi
+
+bash "$APP_DIR/deploy/remote-deploy.sh" "$TAR" --delete-installer
+rc=$?
+echo "=== $(date -Is) finished rc=$rc ==="
+rm -rf "$TREE"
+exit $rc
