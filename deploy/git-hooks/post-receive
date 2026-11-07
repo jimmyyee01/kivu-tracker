@@ -42,7 +42,7 @@ if [ ! -x "$APP_DIR/deploy/remote-deploy.sh" ] && [ ! -f "$APP_DIR/deploy/remote
     exit 1
 fi
 
-bash "$APP_DIR/deploy/remote-deploy.sh" "$TAR" --delete-installer
+bash "$APP_DIR/deploy/remote-deploy.sh" "$TAR" --delete-installer --prune
 rc=$?
 echo "=== $(date -Is) finished rc=$rc ==="
 rm -rf "$TREE"

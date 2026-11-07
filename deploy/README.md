@@ -132,6 +132,11 @@ Notes:
   `sudo systemctl restart kivu-web kivu-ips` over SSH
 * prefer `deploy-from-windows.ps1` when you want the tarball path (it can also
   `-SetupKey`, `-InstallUnits`, `-NoMigrate`) or when you are not in git
+* the hook deploys with `--prune` (rsync mirror), so files you **delete** in a
+  commit really disappear from the server; `php/config.php`, `data/`, `.git/`,
+  `public/download/*.apk` and `public/img/branding/*` stay excluded. Update the
+  installed hook (step above) once to pick this up — an older hook only copies
+  over the tree and leaves removed files behind
 
 ## B. Fresh VPS (new server)
 
@@ -213,6 +218,7 @@ dropdown lists the Google / Esri / Carto layers.
 * never touches the database contents (only `CREATE TABLE IF NOT EXISTS` /
   new columns through `install.php`)
 * never overwrites the server's `php/config.php` (production DB credentials)
-* never deletes server-only files (uploads, published APKs, `data/`) unless
-  you pass `--prune` to `remote-deploy.sh`
+* never deletes server-only files (uploads, published APKs, `data/`,
+  `php/config.php`) — the release is mirrored with `rsync --delete --prune`, so
+  removed code does disappear while those paths stay excluded
 * never seeds demo data unless you ask for it (`--demo`)
