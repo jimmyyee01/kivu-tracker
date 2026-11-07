@@ -45,15 +45,19 @@ document.addEventListener('DOMContentLoaded', function () {
       /* ---------- 1. self-service registration (5-day trial) ---------- */
       const reg = await mount('/register');
       const w = reg.contentWindow;
-      let plans = 0;
+      /* the signup page carries the form only: no plan picker (the plans are
+         offered in Billing once the trial has ended) */
+      let ready = false;
       for (let i = 0; i < 80; i++) {
         await wait(150);
-        plans = qa(reg, '#planGrid .plan-card').length;
-        if (plans) break;
+        const at = q(reg, '#asset_type');
+        ready = !!(q(reg, '#signupForm') && at && at.options.length);
+        if (ready) break;
       }
-      log('STEP1 /register: plan cards=' + plans + ' | note='
-        + ((q(reg, '#formNote') || {}).textContent || '').slice(0, 70));
-      log('STEP2 plans: ' + qa(reg, '#planGrid .plan-card h3').map(x => x.textContent).join(', '));
+      log('STEP1 /register: form ready=' + ready + ' | plan cards=' + qa(reg, '#planGrid').length
+        + ' | note=' + ((q(reg, '#formNote') || {}).textContent || '').slice(0, 70));
+      log('STEP2 plan titles on /register: '
+        + qa(reg, '.plan-card').map(x => x.textContent.slice(0, 20)).join(', ') + ' (none expected)');
       const field = n => q(reg, '#signupForm [name="' + n + '"]');
       field('company').value = 'Harness Fleet ' + tag;
       field('email').value = 'harness' + tag + '@example.com';

@@ -18,17 +18,15 @@
 
   <div class="card pad" style="margin-bottom:14px">
     <h2 style="margin-top:0">Start tracking in minutes — <span id="trialBadge">5-day</span> free trial</h2>
-    <p class="muted small" id="intro">Create your fleet account, connect your trackers and evaluate every feature.
-      No card needed to start; add a plan whenever you are ready and your trial converts into a paid subscription.</p>
+    <p class="muted small" id="intro">Create your fleet account, connect your trackers and use every feature for free.
+      There is no plan to choose and no card to enter now — when the trial ends the console shows the available
+      plans and you pick the one you want to continue with. Nothing is charged before that.</p>
     <div class="banner info" id="signupClosed" style="display:none">
       Self-service registration is currently disabled — ask the platform administrator for an account.
     </div>
   </div>
 
-  <h3>1. Choose a plan</h3>
-  <div class="plan-grid" id="planGrid"></div>
-
-  <h3 style="margin-top:18px">2. Your details</h3>
+  <h3>Your details</h3>
   <form class="card pad" id="signupForm" autocomplete="on" style="max-width:760px">
     <div class="row wrap" style="align-items:flex-start">
       <div class="field" style="flex:1;min-width:240px">
@@ -87,20 +85,21 @@
         </select>
       </div>
     </div>
-    <p class="hint">By creating an account you agree to be invoiced for the selected plan after the free trial.
-      You can cancel auto-renewal at any time from the billing page.</p>
+    <p class="hint">Creating the account starts the free trial and nothing is invoiced during it. The plans and the
+      payment options appear in Billing once the trial has ended — you can open Billing earlier if you would rather
+      subscribe before then.</p>
     <div class="row wrap">
       <button class="btn primary" id="submitBtn" type="submit">Create my account &amp; start the trial</button>
-      <span class="hint" id="formNote"></span>
     </div>
+    <span class="hint" id="formNote" style="display:block;margin-top:8px"></span>
   </form>
 
   <div class="card pad" id="doneCard" style="display:none;margin-top:14px">
     <h2 id="doneTitle" style="margin-top:0">Your trial has started</h2>
     <p class="muted" id="doneText"></p>
     <div class="row wrap">
-      <a class="btn primary" id="btnBilling" href="/billing#details">Add billing details</a>
-      <a class="btn" id="btnConsole" href="/app">Open the monitoring console</a>
+      <a class="btn primary" id="btnConsole" href="/app">Open the monitoring console</a>
+      <a class="btn ghost" id="btnBilling" href="/billing">Plans &amp; billing</a>
     </div>
     <p class="hint" id="doneHint" style="margin-top:10px"></p>
   </div>
