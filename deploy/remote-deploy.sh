@@ -2,8 +2,9 @@
 # =====================================================================
 #  KIVU Tracker — deploy/remote-deploy.sh
 #  Runs ON the VPS. Unpacks an uploaded tarball over the app directory,
-#  keeps the production database config, backs the old code up, checks
-#  every PHP file, tops the schema up and restarts the two services.
+#  keeps the production database credentials (php/config.php ships its code,
+#  the DB_* defines stay), backs the old code up, checks every PHP file,
+#  tops the schema up and restarts the two services.
 #
 #     bash remote-deploy.sh /tmp/kivu-tracker.tar.gz
 #     bash remote-deploy.sh /tmp/kivu-tracker.tar.gz --no-restart --no-migrate
@@ -102,15 +103,52 @@ if [ "$DO_PRUNE" -eq 1 ] && command -v rsync >/dev/null 2>&1; then
     --exclude 'public/download/*.apk' --exclude 'public/img/branding/*' \
     --exclude 'public/media/' \
     "$STAGE"/ "$APP_DIR"/
-  ok "rsync mirror (config.php, data/, .git/, APKs, logos and login media preserved)"
+  ok "rsync mirror (data/, .git/, APKs, logos and login media preserved)"
 else
   cp -a "$STAGE"/. "$APP_DIR"/
   [ "$DO_PRUNE" -eq 1 ] && warn "rsync not installed — mirrored without pruning"
   ok "copied (server-only files such as data/ and APKs are untouched)"
 fi
-cp "$CFG_SAVE" "$APP_DIR/php/config.php"
-rm -f "$CFG_SAVE"
-ok "production php/config.php preserved"
+# php/config.php carries this machine's DB credentials, so it is never taken
+# from a release. Its *code* (shared helpers, auth, schema bootstrap) must
+# still ship though — a helper left behind in the old file would make the whole
+# API fatal. So: install the release's config.php, patch the four DB_* defines
+# back to the values this server already had, and only swap the file in when the
+# result still passes php -l.
+CFG_NEW="$STAGE/php/config.php"
+CFG_OUT="$(mktemp)"
+MERGE_PHP="$(mktemp)"
+cat > "$MERGE_PHP" <<'PHPEOF'
+<?php
+/* Writes the released php/config.php to $outFile with the DB_* defines of the
+   server's current php/config.php put back. Silent; non-zero exit on failure. */
+$prodFile = (string)($argv[1] ?? '');
+$relFile  = (string)($argv[2] ?? '');
+$outFile  = (string)($argv[3] ?? '');
+$prod = @file_get_contents($prodFile);
+$rel  = @file_get_contents($relFile);
+if ($prod === false || $rel === false) { fwrite(STDERR, "config.php not readable\n"); exit(1); }
+$kept = 0;
+foreach (['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASS'] as $k) {
+    if (!preg_match("/^define\('" . $k . "'[^\n]*/m", $prod, $m)) continue;
+    $line = $m[0];
+    $rel = preg_replace_callback("/^define\('" . $k . "'[^\n]*/m",
+        static function () use ($line) { return $line; }, $rel, 1);
+    $kept++;
+}
+if ($kept < 4) { fwrite(STDERR, "DB_* defines not found in the production config.php\n"); exit(2); }
+if (file_put_contents($outFile, $rel) === false) { fwrite(STDERR, "cannot write $outFile\n"); exit(3); }
+PHPEOF
+if "$PHP_BIN" -l "$MERGE_PHP" >/dev/null 2>&1 \
+   && "$PHP_BIN" "$MERGE_PHP" "$CFG_SAVE" "$CFG_NEW" "$CFG_OUT" \
+   && "$PHP_BIN" -l "$CFG_OUT" >/dev/null 2>&1; then
+  cat "$CFG_OUT" > "$APP_DIR/php/config.php"   # same inode, so owner/mode stay
+  ok "php/config.php updated (production DB_* credentials kept)"
+else
+  warn "php/config.php left as it was (release version could not be merged)"
+fi
+rm -f "$MERGE_PHP" "$CFG_OUT" "$CFG_SAVE"
+
 
 # --------------------------------------------------------------- 5. ownership
 say "Fixing ownership and permissions"
