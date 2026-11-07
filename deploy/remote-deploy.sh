@@ -218,11 +218,17 @@ else
   warn "web console returned $CODE — check: journalctl -u $WEB_SVC -n 30 --no-pager"
 fi
 
-if curl -s -m 10 "http://127.0.0.1:$WEB_PORT/js/common.js" | grep -q "google_sat"; then
+# fetch to a file first: piping curl straight into `grep -q` breaks the
+# pipeline (grep exits on the first match, curl dies on SIGPIPE) and reported a
+# false warning even when the file was correct
+ASSET_PROBE="$(mktemp 2>/dev/null || echo /tmp/kivu-asset.probe)"
+if curl -s -m 15 "http://127.0.0.1:$WEB_PORT/js/common.js" -o "$ASSET_PROBE" 2>/dev/null \
+   && grep -q "google_sat" "$ASSET_PROBE" 2>/dev/null; then
   ok "this release is live (map provider list found in /js/common.js)"
 else
   warn "could not confirm the new map provider list on /js/common.js"
 fi
+rm -f "$ASSET_PROBE"
 
 if command -v ss >/dev/null 2>&1; then
   if ss -lntp 2>/dev/null | grep -q ":$IPS_PORT"; then
