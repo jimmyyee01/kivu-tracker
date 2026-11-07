@@ -166,6 +166,8 @@ function h_health($user, $p): array {
         'time' => date('c'), 'database' => $dbOk ? 'ok' : 'error', 'driver' => db()->getAttribute(PDO::ATTR_DRIVER_NAME),
         'platform' => setting('platform_name', APP_NAME), 'logo' => branding_logo_url(),
         'powered_by' => trim((string)setting('powered_by', '')),
+        /* the sign-in page's left panel (picture, looping video or null) */
+        'login_hero' => login_hero_info(),
         'counters' => ['units' => $units, 'messages' => $messages],
         'ips_port' => (int)setting('ips_port', 20332)];
 }
@@ -229,6 +231,8 @@ function h_meta($user, $p): array {
         'platform' => setting('platform_name', APP_NAME),
         'logo' => branding_logo_url(),
         'powered_by' => trim((string)setting('powered_by', '')),
+        /* the sign-in page's left panel (picture, looping video or null) */
+        'login_hero' => login_hero_info(),
         'map_tiles' => setting('map_tiles'),
         'defaults' => ['lat' => (float)setting('default_lat', -1.2921), 'lon' => (float)setting('default_lon', 36.8219),
             'zoom' => (int)setting('default_zoom', 11)],

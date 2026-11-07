@@ -44,6 +44,56 @@ if ($path !== '' && (strpos($path, 'css/') === 0 || strpos($path, 'js/') === 0 |
     }
 }
 
+/* Uploaded sign-in page media (picture or video). Served by hand so the
+   response supports byte ranges: without 206 answers a browser cannot stream,
+   seek or loop a video — it would download it again and again. */
+if ($path !== '' && strpos($path, 'media/') === 0) {
+    $file = $root . '/public/' . $path;
+    if (is_file($file)) {
+        $ext = strtolower((string)pathinfo($file, PATHINFO_EXTENSION));
+        $mimes = ['mp4' => 'video/mp4', 'm4v' => 'video/mp4', 'webm' => 'video/webm',
+            'ogv' => 'video/ogg', 'ogg' => 'video/ogg', 'mov' => 'video/quicktime',
+            'png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg',
+            'webp' => 'image/webp', 'gif' => 'image/gif', 'svg' => 'image/svg+xml'];
+        $mime = $mimes[$ext] ?? 'application/octet-stream';
+        $size = (int)filesize($file);
+        $start = 0; $end = $size > 0 ? $size - 1 : 0; $partial = false;
+        if (isset($_SERVER['HTTP_RANGE'])
+            && preg_match('/^bytes=(\d*)-(\d*)$/', (string)$_SERVER['HTTP_RANGE'], $rm)) {
+            if ($rm[1] === '' && $rm[2] !== '') {              // suffix: bytes=-N
+                $start = max(0, $size - (int)$rm[2]);
+            } else {
+                $start = (int)$rm[1];
+                if ($rm[2] !== '') $end = min((int)$rm[2], $size - 1);
+            }
+            if ($start > $end || $start >= $size) {
+                http_response_code(416);
+                header('Content-Range: bytes */' . $size);
+                return true;
+            }
+            $partial = true;
+        }
+        http_response_code($partial ? 206 : 200);
+        header('Content-Type: ' . $mime);
+        header('Accept-Ranges: bytes');
+        header('Content-Length: ' . ($end - $start + 1));
+        if ($partial) header('Content-Range: bytes ' . $start . '-' . $end . '/' . $size);
+        header('Cache-Control: public, max-age=86400');
+        $fp = fopen($file, 'rb');
+        if ($fp === false) return true;
+        if ($start > 0) fseek($fp, $start);
+        $left = $end - $start + 1;
+        while ($left > 0 && !feof($fp)) {
+            $buf = fread($fp, (int)min(262144, $left));
+            if ($buf === false || $buf === '') break;
+            echo $buf;
+            $left -= strlen($buf);
+        }
+        fclose($fp);
+        return true;
+    }
+}
+
 /* CMS: the front page, platform pages and account pages (/p/<account>/<slug>)
    are rendered server-side by php/cms.php. With no front page published "/"
    redirects to /login (the console opens first); the marketing page is /welcome. */

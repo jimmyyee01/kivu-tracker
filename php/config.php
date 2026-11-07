@@ -118,6 +118,10 @@ function ensure_columns(): void {
             'apk_notes' => 'VARCHAR(500) DEFAULT NULL',
             /* platform logo: an uploaded file under /img/branding/ or any URL */
             'logo_url' => 'VARCHAR(500) DEFAULT NULL',
+            /* sign-in page left panel: a picture or a video the super admin
+               uploads (/media/login/…) or links to; '' = built-in illustration */
+            'login_hero_url' => 'VARCHAR(500) DEFAULT NULL',
+            'login_hero_type' => "VARCHAR(10) NOT NULL DEFAULT 'image'",
             /* optional platform-wide footer credit */
             'powered_by' => 'VARCHAR(180) DEFAULT NULL',
             /* super admin: global offline-alert delay (minutes; 0 = per-rule value) */
@@ -210,6 +214,40 @@ function device_catalogue_codes(): array {
 /* The platform logo the super admin set (uploaded file or URL), '' when none. */
 function branding_logo_url(): string {
     return trim((string)setting('logo_url', ''));
+}
+
+/* ------------------------------------------------- sign-in page hero -- */
+/* The left panel of /login is artwork by default; the super admin can replace
+   it with their own picture or video (Platform settings → Login page media).
+   The upload itself lives in php/routes_admin.php — these helpers are what the
+   public pages read. */
+function login_hero_url(): string {
+    return trim((string)setting('login_hero_url', ''));
+}
+function login_hero_video_exts(): array {
+    return ['mp4', 'webm', 'ogv', 'ogg', 'mov', 'm4v'];
+}
+/* image or video, decided by the file extension (a CDN URL may have none) */
+function login_hero_type_of(string $url): string {
+    $path = (string)parse_url($url, PHP_URL_PATH);
+    $ext = strtolower((string)pathinfo($path, PATHINFO_EXTENSION));
+    return in_array($ext, login_hero_video_exts(), true) ? 'video' : 'image';
+}
+/* What /login should render: ['url','type','version'] or null for the default
+   artwork. `version` (the file's mtime) busts the browser cache when the media
+   is replaced; a media file that vanished on the server falls back to default. */
+function login_hero_info(): ?array {
+    $url = login_hero_url();
+    if ($url === '') return null;
+    $stored = strtolower(trim((string)setting('login_hero_type', '')));
+    $type = in_array($stored, ['image', 'video'], true) ? $stored : login_hero_type_of($url);
+    $version = null;
+    if (strpos($url, '/media/login/') === 0) {
+        $file = dirname(__DIR__) . '/public' . $url;
+        if (!is_file($file)) return null;
+        $version = (int)filemtime($file);
+    }
+    return ['url' => $url, 'type' => $type, 'version' => $version];
 }
 
 /* MySQL DATETIME -> ISO-8601 for the frontend. */

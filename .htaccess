@@ -48,7 +48,9 @@ RewriteRule ^([a-z0-9\-]{2,64})/p/([a-z0-9\-]{1,64})/?$ php/module.php?module=$1
 RewriteRule ^$          php/cms.php         [L]
 
 # Static assets live in public/
-RewriteRule ^(css|js|img)/(.*)$ public/$1/$2 [L]
+# Static assets live in public/ (media/ holds the sign-in page's uploaded
+# picture or video — see Platform settings → Login page media)
+RewriteRule ^(css|js|img|media)/(.*)$ public/$1/$2 [L]
 
 # Optional pretty permanent links for public unit sharing
 RewriteRule ^api/track/([a-f0-9]{32})$ php/api.php?r=/track/$1 [QSA,L]

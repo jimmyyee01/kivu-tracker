@@ -4,6 +4,11 @@ data/*.err
 data/*.json
 data/*.txt
 data/*.out
+# pieces of an in-flight login page media upload
+data/hero-upload/
+
+# the sign-in page picture/video a super admin uploads (server-side file)
+public/media/login/
 
 # uploaded files (if you add uploads later)
 uploads/

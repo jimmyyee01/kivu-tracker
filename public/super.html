@@ -145,6 +145,31 @@
         </div>
       </div>
 
+      <div class="card pad" style="max-width:820px;margin-bottom:14px">
+        <h2>Login page media</h2>
+        <p class="muted small">The left panel of the sign-in page. Upload a picture or a video and it fills the panel
+          edge to edge (cropped, never stretched); a video plays silently on a loop, so the panel never goes blank.
+          Leave it empty for the built-in artwork. PNG, JPG, WebP, GIF or SVG up to 8&nbsp;MB, MP4, WebM, OGG or MOV
+          up to 60&nbsp;MB — big files are sent in 1&nbsp;MB pieces, so no server upload limit gets in the way.</p>
+        <div class="logo-card">
+          <div class="hero-preview" id="heroPreview"></div>
+          <div style="flex:1;min-width:280px">
+            <div class="row wrap">
+              <input type="file" id="heroFile"
+                accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,video/mp4,video/webm,video/ogg,video/quicktime"
+                style="max-width:280px">
+              <button class="btn primary sm" id="btnHeroUpload">Upload media</button>
+              <button class="btn sm danger" id="btnHeroRemove">Reset to default</button>
+            </div>
+            <div class="hero-progress" id="heroProgress" hidden>
+              <div class="hero-bar"><i id="heroBar"></i></div>
+              <span class="hint" id="heroStatus"></span>
+            </div>
+            <p class="hint" id="heroHint" style="margin-top:8px"></p>
+          </div>
+        </div>
+      </div>
+
       <div class="card pad" style="max-width:760px">
         <h2>Platform settings</h2>
         <p class="muted small">These values drive the map, the offline geocoder tolerance, retention and the

@@ -82,7 +82,7 @@ if [ "$DO_BACKUP" -eq 1 ]; then
   BK_DIR="$HOME/kivu-backups"
   mkdir -p "$BK_DIR"
   BK="$BK_DIR/kivu-$(date +%Y%m%d-%H%M%S).tar.gz"
-  tar -czf "$BK" -C "$APP_DIR" --exclude=./data --exclude=./.git . 2>/dev/null || true
+  tar -czf "$BK" -C "$APP_DIR" --exclude=./data --exclude=./.git --exclude=./public/media . 2>/dev/null || true
   ok "$(du -h "$BK" | cut -f1)  ->  $BK"
   ls -1t "$BK_DIR"/kivu-*.tar.gz 2>/dev/null | tail -n +11 | xargs -r rm -f
   ok "kept the 10 newest backups"
@@ -100,8 +100,9 @@ if [ "$DO_PRUNE" -eq 1 ] && command -v rsync >/dev/null 2>&1; then
   rsync -a --delete \
     --exclude 'php/config.php' --exclude 'data/' --exclude '.git/' \
     --exclude 'public/download/*.apk' --exclude 'public/img/branding/*' \
+    --exclude 'public/media/' \
     "$STAGE"/ "$APP_DIR"/
-  ok "rsync mirror (config.php, data/, .git/, APKs and logos preserved)"
+  ok "rsync mirror (config.php, data/, .git/, APKs, logos and login media preserved)"
 else
   cp -a "$STAGE"/. "$APP_DIR"/
   [ "$DO_PRUNE" -eq 1 ] && warn "rsync not installed — mirrored without pruning"
@@ -118,10 +119,10 @@ if [ "$(id -un)" = "root" ]; then
 fi
 find "$APP_DIR" -type d -exec chmod 755 {} +
 find "$APP_DIR" -type f -exec chmod 644 {} +
-mkdir -p "$APP_DIR/data" "$APP_DIR/public/img/branding"
-chmod 775 "$APP_DIR/data" "$APP_DIR/public/img/branding"
+mkdir -p "$APP_DIR/data" "$APP_DIR/public/img/branding" "$APP_DIR/public/media/login"
+chmod 775 "$APP_DIR/data" "$APP_DIR/public/img/branding" "$APP_DIR/public/media/login"
 chmod 755 "$APP_DIR"/deploy/*.sh 2>/dev/null || true
-ok "files 644, directories 755, data/ + branding/ writable"
+ok "files 644, directories 755, data/ + branding/ + media/ writable"
 
 # ------------------------------------------------------------------ 6. schema
 if [ "$DO_MIGRATE" -eq 1 ]; then

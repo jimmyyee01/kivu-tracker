@@ -41,6 +41,8 @@ document.addEventListener('DOMContentLoaded', async function () {
   $('#btnNewPortal').addEventListener('click', newPortal);
   $('#btnLogoUpload').addEventListener('click', uploadLogo);
   $('#btnLogoRemove').addEventListener('click', removeLogo);
+  $('#btnHeroUpload').addEventListener('click', uploadHero);
+  $('#btnHeroRemove').addEventListener('click', removeHero);
   $('#btnReloadModules').addEventListener('click', loadModules);
   $('#btnNewModule').addEventListener('click', () => editModule(null));
   $('#btnRunFinance').addEventListener('click', () => loadFinance(true));
@@ -935,12 +937,134 @@ async function removeLogo() {
   } catch (e) { /* shown */ }
 }
 
+/* --------------------------------------------------- login page media --- */
+/* The left panel of /login. A file is posted in 1 MB pieces to
+   /api/settings/login-hero/chunk (appended server-side under data/hero-upload/)
+   and then assembled by /finish, so a 40 MB video never trips PHP's 2 MB
+   upload_max_filesize. Pictures and videos are both accepted. */
+const HERO_CHUNK = 1024 * 1024;
+const HERO_MAX_IMAGE = 8 * 1024 * 1024;
+const HERO_MAX_VIDEO = 60 * 1024 * 1024;
+const HERO_VIDEO_EXT = /^(mp4|webm|ogv|ogg|mov|m4v)$/i;
+const HERO_IMAGE_EXT = /^(png|jpg|jpeg|webp|gif|svg)$/i;
+
+function heroKind(url, stored) {
+  if (stored === 'video' || stored === 'image') return stored;
+  return HERO_VIDEO_EXT.test(String(url).split('?')[0].split('.').pop() || '') ? 'video' : 'image';
+}
+function renderHeroCard(settings) {
+  settings = settings || Super.settings || {};
+  const url = settings.login_hero_url || '';
+  const kind = heroKind(url, settings.login_hero_type);
+  const box = $('#heroPreview');
+  if (box) {
+    box.innerHTML = '';
+    if (!url) {
+      box.appendChild(el('span', { class: 'empty' }, 'Built-in artwork is used'));
+    } else if (kind === 'video') {
+      const v = el('video', { src: url, muted: '', loop: '', autoplay: '', playsinline: '',
+        preload: 'metadata' });
+      v.muted = true; v.loop = true;
+      box.appendChild(v);
+      try { v.play().catch(() => {}); } catch (e) { /* preview only */ }
+    } else {
+      box.appendChild(el('img', { src: url, alt: 'Login page media' }));
+    }
+  }
+  const hint = $('#heroHint');
+  if (hint) {
+    hint.textContent = url
+      ? 'Current media: ' + url + ' (' + kind + ')' + (url.indexOf('/media/login/') === 0
+        ? ' — an uploaded file; uploading another or resetting deletes it.'
+        : ' — external URL, nothing is stored here.')
+      : 'Nothing set — the sign-in page shows its built-in artwork. You can also paste a picture or video URL in “Login page media URL” below.';
+  }
+}
+async function uploadHero() {
+  const input = $('#heroFile');
+  if (!input || !input.files || !input.files.length) {
+    toast('Choose a picture or a video first', 'warn');
+    return;
+  }
+  const file = input.files[0];
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  const isVideo = HERO_VIDEO_EXT.test(ext);
+  if (!isVideo && !HERO_IMAGE_EXT.test(ext)) {
+    toast('Use a picture (PNG, JPG, WebP, GIF, SVG) or a video (MP4, WebM, OGG, MOV)', 'warn');
+    return;
+  }
+  const limit = isVideo ? HERO_MAX_VIDEO : HERO_MAX_IMAGE;
+  if (file.size > limit) {
+    toast('That file is ' + (file.size / 1048576).toFixed(1) + ' MB — the limit is '
+      + (limit / 1048576) + ' MB', 'warn');
+    return;
+  }
+  const btn = $('#btnHeroUpload');
+  const wrap = $('#heroProgress');
+  const bar = $('#heroBar');
+  const status = $('#heroStatus');
+  if (btn) btn.disabled = true;
+  if (wrap) wrap.hidden = false;
+  if (bar) bar.style.width = '0';
+  if (status) status.textContent = 'Preparing ' + file.name + '…';
+  const uploadId = ((self.crypto && self.crypto.randomUUID)
+    ? self.crypto.randomUUID()
+    : String(Date.now()) + Math.random().toString(16).slice(2) + Date.now().toString(16)
+  ).replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 32) || String(Date.now());
+  const total = Math.max(1, Math.ceil(file.size / HERO_CHUNK));
+  try {
+    for (let i = 0; i < total; i++) {
+      const fd = new FormData();
+      fd.append('upload_id', uploadId);
+      fd.append('index', String(i));
+      fd.append('total', String(total));
+      fd.append('filename', file.name);
+      fd.append('media', file.slice(i * HERO_CHUNK, Math.min(file.size, (i + 1) * HERO_CHUNK)), file.name);
+      await API.post('/api/settings/login-hero/chunk', fd, { silent: true });
+      const pct = Math.round((i + 1) * 100 / total);
+      if (bar) bar.style.width = pct + '%';
+      if (status) status.textContent = 'Sending piece ' + (i + 1) + ' of ' + total + ' — ' + pct + '%';
+    }
+    if (status) status.textContent = 'Checking the file and saving it…';
+    const res = await API.post('/api/settings/login-hero/finish',
+      { upload_id: uploadId }, { silent: true });
+    if (bar) bar.style.width = '100%';
+    toast(res.message || 'Login page media saved', 'ok');
+    input.value = '';
+    Super.settings = Object.assign({}, Super.settings, {
+      login_hero_url: res.login_hero ? res.login_hero.url : '',
+      login_hero_type: res.login_hero ? res.login_hero.type : 'image'
+    });
+    if (status) status.textContent = '';
+    await loadSettings(false);
+  } catch (e) {
+    if (status) status.textContent = e.message;
+    if (bar) bar.style.width = '0';
+  } finally {
+    if (btn) btn.disabled = false;
+    setTimeout(() => {
+      if (wrap) wrap.hidden = true;
+      if (bar) bar.style.width = '0';
+      if (status) status.textContent = '';
+    }, 2500);
+  }
+}
+async function removeHero() {
+  if (!await confirmDialog('Remove the login page media and go back to the built-in artwork?', 'Remove')) return;
+  try {
+    const res = await API.del('/api/settings/login-hero');
+    toast(res.message || 'Default artwork restored', 'ok');
+    await loadSettings(false);
+  } catch (e) { /* shown */ }
+}
+
 /* -------------------------------------------------------------- settings */
 async function loadSettings() {
   const data = await API.get('/api/settings');
   Super.settings = data.settings || {};
   brandingRemember(Super.settings.logo_url || '');
   renderLogoCard(Super.settings);
+  renderHeroCard(Super.settings);
   const box = $('#settingsForm');
   box.innerHTML = '';
   const fields = [
@@ -961,7 +1085,8 @@ async function loadSettings() {
     ['ips_port', 'Wialon IPS TCP port', 'number'],
     ['apk_url', 'Android app URL (blank = /download/kivu-tracker.apk)', 'text'],
     ['apk_version', 'Android app version shown on /download', 'text'],
-    ['apk_notes', 'Android app release notes ("what\'s new")', 'text']
+    ['apk_notes', 'Android app release notes ("what\'s new")', 'text'],
+    ['login_hero_url', 'Login page media URL (picture or video; blank = built-in artwork)', 'text']
   ];
   fields.forEach(f => {
     const w = el('div', { class: 'field' });

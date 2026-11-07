@@ -19,6 +19,10 @@ function routes_admin(): array {
         /* the platform logo: multipart upload + removal */
         ['POST', '#^/settings/logo$#', 'h_logo_upload', 'super'],
         ['DELETE', '#^/settings/logo$#', 'h_logo_delete', 'super'],
+        /* the sign-in page's left panel: picture/video, uploaded in pieces */
+        ['POST', '#^/settings/login-hero/chunk$#', 'h_login_hero_chunk', 'super'],
+        ['POST', '#^/settings/login-hero/finish$#', 'h_login_hero_finish', 'super'],
+        ['DELETE', '#^/settings/login-hero$#', 'h_login_hero_delete', 'super'],
     ];
 }
 
@@ -287,11 +291,178 @@ function h_logo_delete($user, $p): array {
     return ['logo_url' => '', 'message' => 'Logo removed — the default platform mark is back.',
         'settings' => ['logo_url' => '']];
 }
+/* ============================================ login page hero media === */
+/* The sign-in page's left panel starts as artwork; the super admin can replace
+   it with a picture or a video (Platform settings → Login page media). Whatever
+   is set fills the panel edge to edge, and a video plays muted on a loop, so it
+   never stops while somebody is on the page.
+
+   Files arrive in 1 MB pieces and are appended under data/hero-upload/: the
+   bundled web server runs `php -S`, whose upload_max_filesize is 2 MB, so a
+   straight upload would fail for any real video. Only the finished file is moved
+   into public/media/login/, which is served as a static asset (with byte-range
+   support, so the browser can stream and loop it). */
+function login_hero_dir(): string { return dirname(__DIR__) . '/public/media/login'; }
+function login_hero_tmp_dir(): string { return APP_ROOT . '/data/hero-upload'; }
+function login_hero_max_image_bytes(): int { return 8 * 1024 * 1024; }    /* 8 MB  */
+function login_hero_max_video_bytes(): int { return 60 * 1024 * 1024; }   /* 60 MB */
+function login_hero_chunk_bytes(): int { return 1024 * 1024; }            /* 1 MB  */
+function login_hero_max_parts(): int { return 200; }
+function login_hero_image_exts(): array { return ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg']; }
+function login_hero_upload_id(): string {
+    $id = strtolower(bstr('upload_id', ''));
+    need(preg_match('/^[a-z0-9]{16,40}$/', $id) === 1, 'Bad upload id — start the upload again');
+    return $id;
+}
+/* Is this path one of our uploaded hero files? (only those may be deleted) */
+function login_hero_is_local(string $url): bool {
+    return strpos($url, '/media/login/') === 0 && strpos($url, '..') === false;
+}
+function login_hero_delete_file(string $url): void {
+    if (!login_hero_is_local($url)) return;
+    $file = login_hero_dir() . '/' . basename($url);
+    if (is_file($file)) @unlink($file);
+}
+/* Half-finished uploads never live longer than a day. */
+function login_hero_tmp_purge(): void {
+    $dir = login_hero_tmp_dir();
+    if (!is_dir($dir)) return;
+    $cut = time() - 86400;
+    foreach (glob($dir . '/*') ?: [] as $f) {
+        if (@filemtime($f) < $cut) @unlink($f);
+    }
+}
+/* A picture must really be a picture (SVG is XML, so it is screened). */
+function login_hero_assert_image(string $file, string $ext): void {
+    if ($ext === 'svg') {
+        $raw = (string)@file_get_contents($file, false, null, 0, 200000);
+        need(stripos($raw, '<svg') !== false, 'That file is not a valid SVG image');
+        foreach (['<script', 'javascript:', 'onload=', 'onerror=', '<foreignobject', '<iframe'] as $bad) {
+            need(stripos($raw, $bad) === false, 'The SVG contains active content (' . $bad . ') — export a plain image instead');
+        }
+        return;
+    }
+    $info = @getimagesize($file);
+    $mime = is_array($info) ? (string)($info['mime'] ?? '') : '';
+    need($mime !== '' && strpos($mime, 'image/') === 0, 'That file is not an image — use PNG, JPG, WebP, GIF or SVG');
+}
+/* A video must carry a container signature (an extension alone proves nothing). */
+function login_hero_assert_video(string $file, string $ext): void {
+    $head = (string)@file_get_contents($file, false, null, 0, 64);
+    need($head !== '', 'That video file is empty');
+    $ok = strpos($head, 'ftyp') !== false                      // MP4, MOV, M4V
+        || strncmp($head, "\x1A\x45\xDF\xA3", 4) === 0         // WebM, MKV
+        || strpos($head, 'OggS') === 0;                        // OGG
+    need($ok, 'That file is not a playable MP4, WebM, OGG or MOV video — re-export it and try again');
+}
+/* Piece N of an upload: appended in order, so the server never holds the whole
+   file in memory and no single request exceeds the server's upload limit. */
+function h_login_hero_chunk($user, $p): array {
+    $id = login_hero_upload_id();
+    $index = bint('index', -1);
+    $total = bint('total', 0);
+    need($index >= 0, 'Missing piece number');
+    need($total >= 1 && $total <= login_hero_max_parts(),
+        'That file needs too many pieces (' . $total . ') — keep videos under '
+        . round(login_hero_max_video_bytes() / 1048576) . ' MB');
+    $file = $_FILES['media'] ?? null;
+    need(is_array($file) && (int)($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK,
+        'No piece was received (multipart field name: "media")');
+    $tmp = (string)($file['tmp_name'] ?? '');
+    need($tmp !== '' && is_uploaded_file($tmp), 'No piece was received');
+    $size = (int)($file['size'] ?? 0);
+    need($size > 0, 'An empty piece was received');
+    need($size <= login_hero_chunk_bytes() + 262144, 'A piece is too large — send at most 1 MB per piece');
+
+    $dir = login_hero_tmp_dir();
+    if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+        throw new ApiError('Cannot create ' . $dir . ' — check the folder permissions', 500);
+    }
+    login_hero_tmp_purge();
+    $metaFile = $dir . '/' . $id . '.json';
+    $partFile = $dir . '/' . $id . '.part';
+    $meta = is_file($metaFile) ? jdec((string)@file_get_contents($metaFile)) : [];
+    if (!is_array($meta) || !$meta) {
+        $meta = ['name' => substr(basename(bstr('filename', 'media')), 0, 120),
+            'total' => $total, 'next' => 0, 'bytes' => 0, 'started' => time()];
+    }
+    $meta['total'] = $total;
+    need($index === (int)$meta['next'], 'Piece ' . ($index + 1) . ' arrived out of order ('
+        . ((int)$meta['next'] + 1) . ' was expected) — upload the file again');
+    need((int)$meta['bytes'] + $size <= login_hero_max_video_bytes(),
+        'That file is too large — images up to 8 MB, videos up to 60 MB');
+    $out = @fopen($partFile, 'ab');
+    need($out !== false, 'Cannot write ' . $partFile . ' — check that data/ is writable', 500);
+    $in = @fopen($tmp, 'rb');
+    if ($in === false) { fclose($out); throw new ApiError('Cannot read the uploaded piece', 500); }
+    stream_copy_to_stream($in, $out);
+    fclose($in); fclose($out);
+    @unlink($tmp);
+    $meta['next'] = $index + 1;
+    $meta['bytes'] = (int)$meta['bytes'] + $size;
+    @file_put_contents($metaFile, jenc($meta));
+    return ['upload_id' => $id, 'received' => (int)$meta['next'], 'total' => $total,
+        'bytes' => (int)$meta['bytes'],
+        'percent' => (int)round((int)$meta['next'] * 100 / max(1, $total))];
+}
+/* Last piece arrived: validate the assembled file, publish it and make it the
+   sign-in page media. The previous upload is deleted. */
+function h_login_hero_finish($user, $p): array {
+    ensure_schema();
+    $id = login_hero_upload_id();
+    $dir = login_hero_tmp_dir();
+    $metaFile = $dir . '/' . $id . '.json';
+    $partFile = $dir . '/' . $id . '.part';
+    need(is_file($metaFile) && is_file($partFile), 'That upload is no longer on the server — start it again');
+    $meta = jdec((string)@file_get_contents($metaFile));
+    need((int)($meta['next'] ?? 0) === (int)($meta['total'] ?? -1) && (int)($meta['total'] ?? 0) > 0,
+        'Not every piece arrived — upload the file again');
+    $name = (string)($meta['name'] ?? 'media');
+    $ext = strtolower((string)pathinfo($name, PATHINFO_EXTENSION));
+    need(in_array($ext, array_merge(login_hero_image_exts(), login_hero_video_exts()), true),
+        'Use a picture (PNG, JPG, WebP, GIF, SVG) or a video (MP4, WebM, OGG, MOV)');
+    $kind = in_array($ext, login_hero_video_exts(), true) ? 'video' : 'image';
+    $bytes = (int)filesize($partFile);
+    $limit = $kind === 'video' ? login_hero_max_video_bytes() : login_hero_max_image_bytes();
+    need($bytes <= $limit, 'That ' . $kind . ' is ' . round($bytes / 1048576, 1) . ' MB — the limit is '
+        . round($limit / 1048576) . ' MB');
+    if ($kind === 'video') login_hero_assert_video($partFile, $ext);
+    else login_hero_assert_image($partFile, $ext);
+
+    $store = login_hero_dir();
+    if (!is_dir($store) && !@mkdir($store, 0775, true) && !is_dir($store)) {
+        throw new ApiError('Cannot create ' . $store . ' — check the folder permissions', 500);
+    }
+    $savedExt = $ext === 'jpeg' ? 'jpg' : $ext;
+    $target = $store . '/hero-' . substr(hash_file('sha256', $partFile), 0, 16) . '.' . $savedExt;
+    need(@rename($partFile, $target) || (@copy($partFile, $target) && @unlink($partFile)),
+        'Could not save the media (check that public/media/login is writable)', 500);
+    @chmod($target, 0644);
+    @unlink($metaFile);
+    $url = '/media/login/' . basename($target);
+    $previous = (string)setting('login_hero_url', '');
+    settings_save(['login_hero_url' => $url, 'login_hero_type' => $kind]);
+    if ($previous !== '' && $previous !== $url) login_hero_delete_file($previous);
+    audit('login_hero_set', 'settings', 'login_hero', ['url' => $url, 'type' => $kind,
+        'bytes' => $bytes, 'by' => $user['username']]);
+    return ['login_hero' => login_hero_info(), 'message' => $kind === 'video'
+        ? 'Video saved — it now fills the sign-in page and plays on a silent loop.'
+        : 'Picture saved — it now fills the sign-in page panel.'];
+}
+function h_login_hero_delete($user, $p): array {
+    ensure_schema();
+    $previous = (string)setting('login_hero_url', '');
+    settings_save(['login_hero_url' => null, 'login_hero_type' => 'image']);
+    login_hero_delete_file($previous);
+    foreach (glob(login_hero_tmp_dir() . '/*') ?: [] as $f) @unlink($f);
+    audit('login_hero_removed', 'settings', 'login_hero', ['url' => $previous, 'by' => $user['username']]);
+    return ['login_hero' => null, 'message' => 'Default artwork restored on the sign-in page.'];
+}
 function h_settings_save($user, $p): array {
     $allowed = ['platform_name', 'company_name', 'support_email', 'default_currency', 'map_tiles',
         'default_lat', 'default_lon', 'default_zoom', 'online_timeout_s', 'moving_speed_kmh', 'offline_alert_min',
         'retention_days', 'ips_port', 'theme_mode', 'portal_price',
-        'apk_url', 'apk_version', 'apk_notes', 'logo_url', 'powered_by'];
+        'apk_url', 'apk_version', 'apk_notes', 'logo_url', 'login_hero_url', 'powered_by'];
     $fields = [];
     foreach ($allowed as $k) {
         $v = bval($k, null);
@@ -305,6 +476,18 @@ function h_settings_save($user, $p): array {
             $chars = preg_match_all('/./us', $fields[$k]);
             need($chars !== false && $chars <= 180, 'Powered by text must be 180 characters or fewer');
         }
+    }
+    /* sign-in page media: a path (/media/login/…) or an http(s) URL. The type
+       (image/video) follows the extension, and replacing it deletes our old file
+       while an external URL is left alone. */
+    if (array_key_exists('login_hero_url', $fields)) {
+        $url = (string)$fields['login_hero_url'];
+        need($url === '' || preg_match('#^(https?://[^\s]+|/[^\s]*)$#i', $url) === 1,
+            'The sign-in page media must be an http(s) URL or a path starting with /');
+        $previous = (string)setting('login_hero_url', '');
+        if ($url !== $previous) login_hero_delete_file($previous);
+        $fields['login_hero_url'] = $url === '' ? null : $url;
+        $fields['login_hero_type'] = $url === '' ? 'image' : login_hero_type_of($url);
     }
     /* theme policy: everyone chooses, or the platform is locked to one theme */
     if (isset($fields['theme_mode'])
