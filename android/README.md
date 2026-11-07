@@ -9,7 +9,7 @@ into a tracker that reports its own GPS to your server.
 | Package | `com.kivutracker.app` |
 | Version | `1.0.0` (`versionCode 1` — see `app/build.gradle`) |
 | Android | 6.0 (API 23) and newer, target API 34 |
-| Dependencies | **none** (no AndroidX, no third-party libraries) |
+| Dependencies | **Firebase Cloud Messaging only** (push alerts, 1.1.0) — everything else is framework APIs |
 | Built file | `public/download/kivu-tracker.apk` — served as `/download/kivu-tracker.apk` |
 
 ## What it does
@@ -18,6 +18,11 @@ into a tracker that reports its own GPS to your server.
   reports, geofences. The server address is asked once and remembered
   (SharedPreferences); javascript, DOM storage, cookies and downloads
   (reports/CSV, the APK itself) are enabled.
+* **Desktop-only pages stay out of the app.** The WebView identifies itself as
+  `KIVU-Tracker-Android/<version>`, the top bar hides the *Website* link, a
+  navigation guard sends `/cms` back to the console, and the server answers 403
+  for the content manager with that user agent (see the CMS section of the main
+  README). Public website pages (`/p/<slug>`, `/`) are not affected.
 * **Tracker mode** — a foreground service (`TrackerService`) that posts the
   phone's position every *N* seconds to the platform's public ingest endpoint,
   exactly like a hardware tracker:
@@ -41,7 +46,8 @@ into a tracker that reports its own GPS to your server.
 
 The repository ships **source only** (no binary in version control), so the APK
 is compiled on a machine that has the Android toolchain. There is no hidden
-dependency: everything is framework APIs.
+dependency beyond Firebase Cloud Messaging (push alerts in 1.1.0): everything
+else is framework APIs.
 
 ### 1. Prerequisites
 

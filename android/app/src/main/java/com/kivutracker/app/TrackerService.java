@@ -7,11 +7,13 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Build;
+import android.os.BatteryManager;
 import android.os.Bundle;
 import android.os.IBinder;
 
@@ -52,6 +54,17 @@ public class TrackerService extends Service implements LocationListener {
 
     @Override public IBinder onBind(Intent intent) { return null; }
 
+    /* retries registration while running: the user may grant precise location
+       AFTER starting tracker mode — the error note must self-heal within 15 s */
+    private final android.os.Handler retryHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable retryTick = new Runnable() {
+        @Override public void run() {
+            if (!active) return;
+            registerIfPossible();
+            retryHandler.postDelayed(this, 15000);
+        }
+    };
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         startForeground(NOTIFY_ID, notification("Tracker mode is on — waiting for a fix…"));
@@ -60,27 +73,40 @@ public class TrackerService extends Service implements LocationListener {
             SharedPreferences p = getSharedPreferences(MainActivity.PREFS, Context.MODE_PRIVATE);
             interval = Math.max(5, p.getInt("interval_s", 30));
             lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-            try {
-                if (lm != null) {
-                    lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, interval * 1000L, 0f, this);
-                    if (lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-                        lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, interval * 1000L, 0f, this);
-                    }
-                }
-            } catch (SecurityException e) {
-                lastNote = "location permission missing";
-                update("Tracker mode: " + lastNote);
-            } catch (Exception e) {
-                lastNote = "no location provider";
-                update("Tracker mode: " + lastNote);
-            }
+            registerIfPossible();
+            retryHandler.removeCallbacks(retryTick);
+            retryHandler.postDelayed(retryTick, 15000);
         }
         return START_STICKY;             // Android restarts it if it is killed
+    }
+
+    /* Registers the listeners; safe to call repeatedly. Clears the permission
+       note as soon as the grant is actually usable (GPS needs PRECISE location). */
+    private void registerIfPossible() {
+        try {
+            if (lm == null) lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+            if (lm == null) return;
+            lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, interval * 1000L, 0f, this);
+            if (lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, interval * 1000L, 0f, this);
+            }
+            if ("location permission missing".equals(lastNote) || lastNote.contains("permission")) {
+                lastNote = "waiting for the first fix…";
+                update("Tracker mode: " + lastNote);
+            }
+        } catch (SecurityException e) {
+            lastNote = "location permission missing (enable PRECISE location)";
+            update("Tracker mode: " + lastNote);
+        } catch (Exception e) {
+            lastNote = "no location provider";
+            update("Tracker mode: " + lastNote);
+        }
     }
 
     @Override
     public void onDestroy() {
         active = false;
+        retryHandler.removeCallbacks(retryTick);
         try { if (lm != null) lm.removeUpdates(this); } catch (Exception ignored) { }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) stopForeground(STOP_FOREGROUND_REMOVE);
         else stopForeground(true);
@@ -96,6 +122,19 @@ public class TrackerService extends Service implements LocationListener {
     @Override public void onStatusChanged(String provider, int status, Bundle extras) { }
 
     /* ------------------------------------------------------------- ingest -- */
+    /** Battery level 0-100, read from the sticky battery broadcast (-1 = unknown). */
+    private int batteryPercent() {
+        try {
+            Intent i = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            if (i != null) {
+                int level = i.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+                int scale = i.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+                if (level >= 0 && scale > 0) return Math.round(level * 100f / scale);
+            }
+        } catch (Exception ignored) { }
+        return -1;
+    }
+
     /** Sends one fix on a background thread — the network never blocks the UI. */
     private void post(final Location loc) {
         final SharedPreferences p = getSharedPreferences(MainActivity.PREFS, Context.MODE_PRIVATE);
@@ -119,6 +158,8 @@ public class TrackerService extends Service implements LocationListener {
                     if (loc.hasBearing()) point.put("course", Math.round(loc.getBearing()));
                     if (loc.hasAltitude()) point.put("alt", Math.round(loc.getAltitude()));
                     if (loc.getAccuracy() > 0) point.put("accuracy", Math.round(loc.getAccuracy()));
+                    int bat = batteryPercent();
+                    if (bat >= 0) point.put("battery", bat);
 
                     JSONObject body = new JSONObject();
                     body.put("unique_id", unit);

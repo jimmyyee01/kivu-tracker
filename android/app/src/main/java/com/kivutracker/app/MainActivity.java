@@ -65,11 +65,37 @@ public class MainActivity extends Activity {
         s.setBuiltInZoomControls(false);
         s.setLoadWithOverviewMode(true);
         s.setUseWideViewPort(true);
+        /* Identify the app to the server. The website content manager (/cms)
+           is a desktop console: the server refuses it for this user agent, so
+           it can never open inside the app even if someone types the URL. */
+        try {
+            String v = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+            s.setUserAgentString(s.getUserAgentString() + " KIVU-Tracker-Android/" + (v == null ? "1" : v));
+        } catch (Exception e) {
+            s.setUserAgentString(s.getUserAgentString() + " KIVU-Tracker-Android/1");
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         }
         CookieManager.getInstance().setAcceptCookie(true);
-        web.setWebViewClient(new WebViewClient());
+        /* mirror the console session (localStorage kt_token) into prefs so the
+           push registration can authenticate against /api/push/device */
+        web.setWebViewClient(new WebViewClient() {
+            @Override public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                return guardConsoleOnlyUrl(url);
+            }
+            @Override public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                view.evaluateJavascript("localStorage.getItem('kt_token')", value -> {
+                    if (value == null || value.equals("null") || value.length() <= 2) return;
+                    String tok = value.substring(1, value.length() - 1);
+                    if (tok.isEmpty()) return;
+                    prefs().edit().putString("api_token", tok).apply();
+                    String fcm = prefs().getString("fcm_token", "");
+                    if (!fcm.isEmpty()) DeviceReporter.registerAsync(MainActivity.this, fcm);
+                });
+            }
+        });
         web.setWebChromeClient(new WebChromeClient());
         /* the console offers the APK and CSV/report downloads — hand them to Android */
         web.setDownloadListener(new DownloadListener() {
@@ -89,12 +115,38 @@ public class MainActivity extends Activity {
 
         if (serverUrl(this).isEmpty()) askServer(true);
         else loadConsole();
+
+        /* push: fetch this device's FCM token (soft-fails until google-services.json) */
+        try {
+            com.google.firebase.messaging.FirebaseMessaging.getInstance().getToken()
+                .addOnCompleteListener(task -> {
+                    if (!task.isSuccessful() || task.getResult() == null) return;
+                    prefs().edit().putString("fcm_token", task.getResult()).apply();
+                    DeviceReporter.registerAsync(MainActivity.this, task.getResult());
+                });
+        } catch (Throwable ignored) {
+            /* Firebase not configured yet — push stays dormant until the json lands */
+        }
     }
 
     private void loadConsole() {
         String base = serverUrl(this);
         if (base.isEmpty()) { askServer(true); return; }
         web.loadUrl(base + "/app");
+    }
+
+    /** Pages that exist only in the desktop consoles never open in the app.
+     *  The website content manager is one of them (the server refuses it for
+     *  this user agent too, so this is only a friendlier first line). */
+    private boolean guardConsoleOnlyUrl(String url) {
+        if (url == null) return false;
+        String path = Uri.parse(url).getPath();
+        if (path != null && (path.equals("/cms") || path.startsWith("/cms/"))) {
+            Toast.makeText(this, "The content manager is not available in the app", Toast.LENGTH_SHORT).show();
+            loadConsole();
+            return true;
+        }
+        return false;
     }
 
     /** Sensible default for the very first run (build-time value). */

@@ -39,5 +39,21 @@
             android:name=".TrackerService"
             android:exported="false"
             android:foregroundServiceType="location" />
+
+        <!-- Push alerts: FCM delivers banners even when the app is closed;
+             tapping one opens MainActivity. Channel id matches KivuPushService. -->
+        <service
+            android:name=".KivuPushService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="kivu_alerts" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_launcher" />
     </application>
 </manifest>

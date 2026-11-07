@@ -1,5 +1,8 @@
-/* Root build file — Android Gradle Plugin only, no other dependencies.
+/* Root build file — Android Gradle Plugin + the Google Services plugin
+   (applied by :app only when google-services.json exists, so builds keep
+   working before the Firebase project files are added).
    Build:  see android/README.md  (gradle assembleRelease, or build-apk.ps1) */
 plugins {
     id 'com.android.application' version '8.5.2' apply false
+    id 'com.google.gms.google-services' version '4.4.3' apply false
 }
